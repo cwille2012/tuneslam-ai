@@ -9,7 +9,7 @@ function QueueItem({ song, index, sessionName, currentUserId, onVoteUpdate }) {
   const isOwnSong = currentUserId && song.addedBy?._id === currentUserId;
 
   const handleVote = async (voteType) => {
-    if (voting || isOwnSong) return;
+    if (voting || isOwnSong || song.isLocked) return;
     
     setVoting(true);
     try {

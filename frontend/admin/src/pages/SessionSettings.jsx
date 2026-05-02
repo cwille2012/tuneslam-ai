@@ -10,7 +10,9 @@ function SessionSettings() {
     downvoteThreshold: 3,
     maxSongDuration: 420,
     songsPerHourLimit: null,
-    allowReaddingRemovedSongs: false
+    allowReaddingRemovedSongs: false,
+    autoFillMode: 'genre-search',
+    autoFillMinimum: 3
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,7 +38,9 @@ function SessionSettings() {
     const { name, value, type, checked } = e.target;
     setSettings(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (value === '' ? null : parseInt(value))
+      [name]: type === 'checkbox' ? checked : 
+              type === 'select-one' ? value :  // Handle select dropdowns as strings
+              (value === '' ? null : parseInt(value))
     }));
   };
 
@@ -141,6 +145,40 @@ function SessionSettings() {
               <label style={{ margin: 0 }}>
                 Allow re-adding songs that were removed by downvotes
               </label>
+            </div>
+
+            <div className="form-group">
+              <label>Auto-Fill Mode</label>
+              <select
+                name="autoFillMode"
+                value={settings.autoFillMode || 'genre-search'}
+                onChange={handleChange}
+                disabled={saving}
+              >
+                <option value="genre-search">Genre Search (Recommended)</option>
+                <option value="top-tracks">Your Top Tracks</option>
+                <option value="related-artists">Related Artists</option>
+                <option value="off">Disabled</option>
+              </select>
+              <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                Strategy for automatically filling the queue with AI-recommended songs when it gets low
+              </small>
+            </div>
+
+            <div className="form-group">
+              <label>Auto-Fill Minimum Queue Size</label>
+              <input
+                type="number"
+                name="autoFillMinimum"
+                value={settings.autoFillMinimum || 3}
+                onChange={handleChange}
+                min="1"
+                max="10"
+                disabled={saving}
+              />
+              <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                Maintain at least this many songs in the queue (only applies if Auto-Fill is enabled)
+              </small>
             </div>
 
             {message && <div className="success-message">{message}</div>}

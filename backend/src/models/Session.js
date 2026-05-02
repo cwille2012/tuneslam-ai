@@ -74,7 +74,16 @@ const sessionSchema = new mongoose.Schema({
       default: null
     },
     backupPlaylistId: String,
-    backupGenre: String
+    backupGenre: String,
+    autoFillMode: {
+      type: String,
+      enum: ['top-tracks', 'related-artists', 'genre-search', 'off'],
+      default: 'genre-search'
+    },
+    autoFillMinimum: {
+      type: Number,
+      default: 3
+    }
   },
   blacklist: [{
     type: String // Spotify track IDs

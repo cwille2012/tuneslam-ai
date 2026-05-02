@@ -22,7 +22,10 @@ function ManageSession() {
     if (!connected) return;
 
     const handleQueueUpdated = (data) => {
-      setQueue(data.queue || []);
+      // Filter to only show queued songs
+      const allSongs = data.queue || [];
+      const queuedOnly = allSongs.filter(s => s.status === 'queued');
+      setQueue(queuedOnly);
     };
 
     const handleSongAdded = () => {
@@ -51,7 +54,11 @@ function ManageSession() {
         queueAPI.get(sessionName)
       ]);
       setSession(sessionRes.data.session);
-      setQueue(queueRes.data.queue);
+      
+      // Filter to only show queued songs (not playing or played)
+      const allSongs = queueRes.data.queue || [];
+      const queuedOnly = allSongs.filter(s => s.status === 'queued');
+      setQueue(queuedOnly);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load session');
     } finally {
@@ -62,7 +69,10 @@ function ManageSession() {
   const loadQueue = async () => {
     try {
       const response = await queueAPI.get(sessionName);
-      setQueue(response.data.queue);
+      // Filter to only show queued songs
+      const allSongs = response.data.queue || [];
+      const queuedOnly = allSongs.filter(s => s.status === 'queued');
+      setQueue(queuedOnly);
     } catch (err) {
       console.error('Failed to load queue:', err);
     }
@@ -222,13 +232,15 @@ function ManageSession() {
                       ↑{song.upvotes} ↓{song.downvotes}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveSong(song._id)}
-                    className="btn btn-danger"
-                    style={{ padding: '8px 16px' }}
-                  >
-                    Remove
-                  </button>
+                  {song.status === 'queued' && (
+                    <button
+                      onClick={() => handleRemoveSong(song._id)}
+                      className="btn btn-danger"
+                      style={{ padding: '8px 16px' }}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               ))
             )}

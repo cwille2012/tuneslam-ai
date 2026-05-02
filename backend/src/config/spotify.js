@@ -14,6 +14,7 @@ export const spotifyConfig = {
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
+      'user-top-read',
       'playlist-read-private',
       'playlist-read-collaborative',
       'playlist-modify-public',

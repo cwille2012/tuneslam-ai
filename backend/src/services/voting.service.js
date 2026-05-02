@@ -27,8 +27,8 @@ export const castVote = async (sessionId, songId, userId, voteType) => {
     throw new Error('This song is locked and will play next');
   }
   
-  // Check if user is trying to vote on their own song
-  if (song.addedBy.toString() === userId.toString()) {
+  // Check if user is trying to vote on their own song (allow voting on system songs)
+  if (song.addedBy && song.addedBy.toString() === userId.toString()) {
     throw new Error('You cannot vote on songs you added');
   }
   

@@ -64,6 +64,16 @@ function SessionView() {
       }
     };
 
+    const handleSongLocked = (data) => {
+      console.log('🔒 Song locked:', data.songId);
+      // Update queue to show locked song
+      setQueue(prev => prev.map(s => 
+        s._id === data.songId 
+          ? { ...s, isLocked: true }
+          : { ...s, isLocked: false }  // Only one song can be locked
+      ));
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
@@ -72,6 +82,7 @@ function SessionView() {
     on('session-status-changed', handleSessionStatusChanged);
     on('user-blocked', handleUserBlocked);
     on('user-unblocked', handleUserUnblocked);
+    on('song-locked', handleSongLocked);
 
     return () => {
       off('queue-updated', handleQueueUpdated);
@@ -82,6 +93,7 @@ function SessionView() {
       off('session-status-changed', handleSessionStatusChanged);
       off('user-blocked', handleUserBlocked);
       off('user-unblocked', handleUserUnblocked);
+      off('song-locked', handleSongLocked);
     };
   }, [connected, on, off, user]);
 

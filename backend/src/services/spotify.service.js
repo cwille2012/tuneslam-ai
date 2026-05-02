@@ -337,32 +337,24 @@ export const startPlayback = async (sessionId, playlistId) => {
   }
 };
 
-export const getRecommendations = async (sessionId, seedTracks, limit = 5) => {
+// AUTO-FILL STRATEGY 1: Admin's Top Tracks
+export const getTopTracks = async (sessionId, limit = 10) => {
   const accessToken = await getValidAccessToken(sessionId);
   
   try {
-    // Spotify requires 1-5 seed tracks
-    const seeds = seedTracks.slice(0, 5).join(',');
-    
-    if (!seeds) {
-      console.log('No seed tracks provided for recommendations');
-      return [];
-    }
-    
-    const response = await axios.get(`${SPOTIFY_API_BASE}/recommendations`, {
+    const response = await axios.get(`${SPOTIFY_API_BASE}/me/top/tracks`, {
       params: {
-        seed_tracks: seeds,
         limit: limit,
-        market: 'US'  // Required market parameter
+        time_range: 'short_term'  // Last 4 weeks
       },
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
     
-    console.log(`✅ Got ${response.data.tracks.length} recommendations from Spotify`);
+    console.log(`✅ Got ${response.data.items.length} top tracks`);
     
-    return response.data.tracks.map(track => ({
+    return response.data.items.map(track => ({
       spotifyTrackId: track.id,
       title: track.name,
       artist: track.artists.map(a => a.name).join(', '),
@@ -372,8 +364,136 @@ export const getRecommendations = async (sessionId, seedTracks, limit = 5) => {
       uri: track.uri
     }));
   } catch (error) {
-    console.error('Error getting recommendations:', error.response?.data || error.message);
-    console.error('Seed tracks used:', seedTracks);
+    console.error('Error getting top tracks:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+// AUTO-FILL STRATEGY 2: Related Artists' Top Tracks
+export const getRelatedArtistsTracks = async (sessionId, recentSongs, limit = 10) => {
+  const accessToken = await getValidAccessToken(sessionId);
+  
+  try {
+    if (recentSongs.length === 0) {
+      console.log('⚠️ No recent songs for related artists');
+      return [];
+    }
+    
+    // Get artist ID from most recent song
+    const lastSong = recentSongs[0];
+    console.log(`🔍 Searching for artist: "${lastSong.artist}"`);
+    
+    const searchResponse = await axios.get(`${SPOTIFY_API_BASE}/search`, {
+      params: {
+        q: `artist:${lastSong.artist}`,
+        type: 'artist',
+        limit: 1
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (!searchResponse.data.artists.items.length) {
+      console.log(`⚠️ Artist "${lastSong.artist}" not found on Spotify`);
+      return [];
+    }
+    
+    const artistId = searchResponse.data.artists.items[0].id;
+    const artistName = searchResponse.data.artists.items[0].name;
+    console.log(`✅ Found artist: ${artistName} (ID: ${artistId})`);
+    
+    // Get related artists
+    const relatedResponse = await axios.get(`${SPOTIFY_API_BASE}/artists/${artistId}/related-artists`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    const relatedCount = relatedResponse.data.artists.length;
+    console.log(`✅ Got ${relatedCount} related artists`);
+    
+    if (relatedCount === 0) {
+      console.log('⚠️ No related artists found');
+      return [];
+    }
+    
+    // Get top tracks from related artists
+    const tracks = [];
+    for (const artist of relatedResponse.data.artists.slice(0, 3)) {
+      console.log(`🎵 Fetching top tracks from: ${artist.name}`);
+      
+      const topTracksResponse = await axios.get(
+        `${SPOTIFY_API_BASE}/artists/${artist.id}/top-tracks`,
+        {
+          params: { market: 'US' },
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        }
+      );
+      
+      const artistTracks = topTracksResponse.data.tracks.slice(0, 3);
+      console.log(`   Got ${artistTracks.length} tracks from ${artist.name}`);
+      tracks.push(...artistTracks);
+      
+      if (tracks.length >= limit) break;
+    }
+    
+    console.log(`✅ Total related artist tracks: ${tracks.length}`);
+    
+    return tracks.slice(0, limit).map(track => ({
+      spotifyTrackId: track.id,
+      title: track.name,
+      artist: track.artists.map(a => a.name).join(', '),
+      album: track.album.name,
+      duration: Math.floor(track.duration_ms / 1000),
+      albumArt: track.album.images[0]?.url || '',
+      uri: track.uri
+    }));
+  } catch (error) {
+    console.error('❌ Error getting related artists tracks:');
+    console.error('   Status:', error.response?.status);
+    console.error('   Error:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+// AUTO-FILL STRATEGY 3: Genre-Based Search
+export const getGenreBasedTracks = async (sessionId, recentSongs, limit = 10) => {
+  const accessToken = await getValidAccessToken(sessionId);
+  
+  try {
+    if (recentSongs.length === 0) return [];
+    
+    // Extract unique artists from recent songs
+    const artists = [...new Set(recentSongs.slice(0, 5).map(s => s.artist))];
+    
+    // Build search query with artist names
+    const query = artists.slice(0, 3).join(' OR ');
+    
+    const response = await axios.get(`${SPOTIFY_API_BASE}/search`, {
+      params: {
+        q: query,
+        type: 'track',
+        limit: limit
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    console.log(`✅ Got ${response.data.tracks.items.length} genre-based tracks`);
+    
+    return response.data.tracks.items.map(track => ({
+      spotifyTrackId: track.id,
+      title: track.name,
+      artist: track.artists.map(a => a.name).join(', '),
+      album: track.album.name,
+      duration: Math.floor(track.duration_ms / 1000),
+      albumArt: track.album.images[0]?.url || '',
+      uri: track.uri
+    }));
+  } catch (error) {
+    console.error('Error getting genre-based tracks:', error.response?.data || error.message);
     return [];
   }
 };

@@ -265,12 +265,19 @@ const handleSongCompletion = async (session, currentSong, queuedSongs) => {
 
 const fillQueue = async (session, currentQueue) => {
   try {
-    const songsNeeded = 3 - currentQueue.length;
+    const autoFillMode = session.settings.autoFillMode || 'genre-search';
+    const minQueue = session.settings.autoFillMinimum || 3;
+    const songsNeeded = minQueue - currentQueue.length;
+    
     if (songsNeeded <= 0) return;
+    if (autoFillMode === 'off') {
+      console.log('Auto-fill is disabled');
+      return;
+    }
 
-    console.log(`📝 Auto-filling queue with ${songsNeeded} AI recommendations...`);
+    console.log(`📝 Auto-filling queue using "${autoFillMode}" strategy (need ${songsNeeded} songs)...`);
 
-    // Get recent played and queued songs as seeds
+    // Get recent played and queued songs
     const recentSongs = await Song.find({
       sessionId: session._id,
       status: { $in: ['played', 'queued', 'playing'] }
@@ -278,26 +285,45 @@ const fillQueue = async (session, currentQueue) => {
       .sort({ addedAt: -1 })
       .limit(10);
 
-    if (recentSongs.length === 0) {
-      console.log('No recent songs for recommendations');
+    if (recentSongs.length === 0 && autoFillMode !== 'top-tracks') {
+      console.log('No recent songs for auto-fill');
       return;
     }
 
-    // Get seed track IDs (max 5)
-    const seedIds = recentSongs.slice(0, 5).map(s => s.spotifyTrackId);
+    // Get tracks based on selected strategy
+    let tracks = [];
+    const {
+      getTopTracks,
+      getRelatedArtistsTracks,
+      getGenreBasedTracks
+    } = await import('./spotify.service.js');
 
-    // Get recommendations from Spotify
-    const { getRecommendations } = await import('./spotify.service.js');
-    const recommendations = await getRecommendations(session._id, seedIds, songsNeeded + 2);
+    switch (autoFillMode) {
+      case 'top-tracks':
+        tracks = await getTopTracks(session._id, songsNeeded + 5);
+        break;
+      
+      case 'related-artists':
+        tracks = await getRelatedArtistsTracks(session._id, recentSongs, songsNeeded + 5);
+        break;
+      
+      case 'genre-search':
+        tracks = await getGenreBasedTracks(session._id, recentSongs, songsNeeded + 5);
+        break;
+        
+      default:
+        console.log(`Unknown auto-fill mode: ${autoFillMode}`);
+        return;
+    }
 
-    if (recommendations.length === 0) {
-      console.log('No recommendations received from Spotify');
+    if (tracks.length === 0) {
+      console.log(`No tracks received from ${autoFillMode} strategy`);
       return;
     }
 
     // Filter out duplicates and blacklisted
     const existingTrackIds = [...recentSongs.map(s => s.spotifyTrackId)];
-    const filtered = recommendations.filter(track => 
+    const filtered = tracks.filter(track => 
       !existingTrackIds.includes(track.spotifyTrackId) &&
       !session.blacklist.includes(track.spotifyTrackId) &&
       track.duration <= session.settings.maxSongDuration
@@ -325,7 +351,7 @@ const fillQueue = async (session, currentQueue) => {
 
       await song.save();
       added++;
-      console.log(`✅ Added AI recommendation: ${track.title} by ${track.artist}`);
+      console.log(`✅ Added (${autoFillMode}): ${track.title} by ${track.artist}`);
     }
 
     if (added > 0) {
@@ -343,7 +369,7 @@ const fillQueue = async (session, currentQueue) => {
         queue: updatedQueue
       });
 
-      console.log(`🎵 Auto-filled queue with ${added} songs`);
+      console.log(`🎵 Auto-filled queue with ${added} songs using ${autoFillMode}`);
     }
   } catch (error) {
     console.error('Error filling queue:', error);

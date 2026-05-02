@@ -61,12 +61,23 @@ function TVDisplay() {
       setProgress(data);
     };
 
+    const handleSongLocked = (data) => {
+      console.log('🔒 song-locked received:', data.songId);
+      // Update queue to show locked song
+      setQueue(prev => prev.map(s => 
+        s._id === data.songId 
+          ? { ...s, isLocked: true }
+          : { ...s, isLocked: false }
+      ));
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
     on('votes-changed', handleVotesChanged);
     on('now-playing-updated', handleNowPlayingUpdated);
     on('playback-progress', handlePlaybackProgress);
+    on('song-locked', handleSongLocked);
 
     console.log('✅ All socket handlers registered');
 
@@ -77,6 +88,7 @@ function TVDisplay() {
       off('votes-changed', handleVotesChanged);
       off('now-playing-updated', handleNowPlayingUpdated);
       off('playback-progress', handlePlaybackProgress);
+      off('song-locked', handleSongLocked);
     };
   }, [connected, on, off]);
 
