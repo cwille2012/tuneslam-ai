@@ -1,0 +1,124 @@
+// Load environment variables FIRST before any other imports
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables from explicit path BEFORE importing anything else
+dotenv.config({ path: join(__dirname, '../.env') });
+
+// Log Spotify config to verify it loaded (remove in production)
+console.log('🔍 Spotify Config Check:', {
+  hasClientId: !!process.env.SPOTIFY_CLIENT_ID,
+  hasClientSecret: !!process.env.SPOTIFY_CLIENT_SECRET,
+  hasRedirectUri: !!process.env.SPOTIFY_REDIRECT_URI,
+  redirectUri: process.env.SPOTIFY_REDIRECT_URI
+});
+
+// NOW import everything else
+import express from 'express';
+import { createServer } from 'http';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { connectDB } from './config/database.js';
+import { connectRedis } from './config/redis.js';
+import { initializeSocket } from './config/socket.js';
+
+// Import routes
+import authRoutes from './routes/auth.routes.js';
+import sessionRoutes from './routes/session.routes.js';
+import queueRoutes from './routes/queue.routes.js';
+import userRoutes from './routes/user.routes.js';
+import spotifyRoutes from './routes/spotify.routes.js';
+
+// Import services
+import { startPlaybackMonitoring } from './services/playback.service.js';
+
+const app = express();
+const httpServer = createServer(app);
+
+// Middleware
+app.use(helmet());
+
+// Parse comma-separated CORS origins
+const allowedOrigins = [
+  ...(process.env.ADMIN_URL?.split(',') || []),
+  ...(process.env.USER_URL?.split(',') || []),
+  ...(process.env.VIEWER_URL?.split(',') || [])
+].filter(Boolean);
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/sessions', queueRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/spotify', spotifyRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Internal server error'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Route not found'
+  });
+});
+
+// Initialize connections and start server
+const PORT = process.env.PORT || 5000;
+
+async function startServer() {
+  try {
+    // Connect to MongoDB
+    await connectDB();
+    console.log('✅ MongoDB connected');
+
+    // Connect to Redis
+    await connectRedis();
+    console.log('✅ Redis connected');
+
+    // Initialize Socket.io
+    initializeSocket(httpServer);
+    console.log('✅ Socket.io initialized');
+
+    // Start playback monitoring
+    startPlaybackMonitoring();
+    console.log('✅ Playback monitoring started');
+
+    // Start server
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`   Environment: ${process.env.NODE_ENV}`);
+      console.log(`   API: http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

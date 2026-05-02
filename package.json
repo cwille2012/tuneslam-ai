@@ -1,0 +1,32 @@
+{
+  "name": "tuneslam",
+  "version": "1.0.0",
+  "description": "Collaborative music queue application for parties and bars",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend/admin",
+    "frontend/user",
+    "frontend/viewer"
+  ],
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend/admin && npm install && cd ../user && npm install && cd ../viewer && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:admin\" \"npm run dev:user\" \"npm run dev:viewer\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:admin": "cd frontend/admin && npm run dev",
+    "dev:user": "cd frontend/user && npm run dev",
+    "dev:viewer": "cd frontend/viewer && npm run dev"
+  },
+  "keywords": [
+    "music",
+    "spotify",
+    "queue",
+    "voting",
+    "realtime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
