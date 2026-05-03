@@ -45,6 +45,7 @@ import queueRoutes from './routes/queue.routes.js';
 import userRoutes from './routes/user.routes.js';
 import spotifyRoutes from './routes/spotify.routes.js';
 import userSpotifyRoutes from './routes/user-spotify.routes.js';
+import adminSpotifyRoutes from './routes/admin-spotify.routes.js';
 
 // Import services
 import { startPlaybackMonitoring } from './services/playback.service.js';
@@ -88,6 +89,7 @@ app.use('/api/sessions', queueRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/user/spotify', userSpotifyRoutes);
+app.use('/api/admin/spotify', adminSpotifyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

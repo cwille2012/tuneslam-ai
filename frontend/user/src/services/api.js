@@ -63,7 +63,7 @@ export const userSpotifyAPI = {
   getStatus: () => api.get('/user/spotify/status'),
   getPlaylists: () => api.get('/user/spotify/playlists'),
   getPlaylistTracks: (playlistId) => api.get(`/user/spotify/playlists/${playlistId}/tracks`),
-  getSavedTracks: () => api.get('/user/spotify/saved-tracks'),
+  getSavedTracks: (offset = 0, limit = 50) => api.get('/user/spotify/saved-tracks', { params: { offset, limit } }),
   unlink: () => api.delete('/user/spotify/unlink')
 };
 

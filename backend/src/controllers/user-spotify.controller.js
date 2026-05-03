@@ -218,9 +218,13 @@ export const getSavedTracks = async (req, res) => {
 
     const accessToken = await getValidToken(user);
 
+    // Get pagination params from query
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+
     const response = await axios.get('https://api.spotify.com/v1/me/tracks', {
       headers: { 'Authorization': `Bearer ${accessToken}` },
-      params: { limit: 50 }
+      params: { limit, offset }
     });
 
     const tracks = response.data.items.map(item => ({
@@ -233,7 +237,13 @@ export const getSavedTracks = async (req, res) => {
       popularity: item.track.popularity
     }));
 
-    res.json({ success: true, tracks });
+    res.json({ 
+      success: true, 
+      tracks,
+      total: response.data.total,
+      hasMore: response.data.next !== null,
+      offset: offset + tracks.length
+    });
   } catch (error) {
     console.error('Get saved tracks error:', error.response?.data || error.message);
     res.status(500).json({

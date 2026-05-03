@@ -73,6 +73,14 @@ export const spotifyAPI = {
   getGenres: (sessionName) => api.get(`/spotify/genres/${sessionName}`)
 };
 
+// Admin Spotify API (uses session's Spotify credentials)
+export const adminSpotifyAPI = {
+  getStatus: () => api.get('/admin/spotify/status'),
+  getPlaylists: () => api.get('/admin/spotify/playlists'),
+  getPlaylistTracks: (playlistId) => api.get(`/admin/spotify/playlists/${playlistId}/tracks`),
+  getSavedTracks: (offset = 0, limit = 50) => api.get('/admin/spotify/saved-tracks', { params: { offset, limit } })
+};
+
 // User APIs
 export const userAPI = {
   getStats: () => api.get('/users/me/stats'),

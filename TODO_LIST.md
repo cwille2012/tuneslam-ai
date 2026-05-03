@@ -8,11 +8,15 @@ Make services and connect to tuneslam.com
 Should down votes be a thing?
 User logs in with spotify and automatically connects spotify?
 Add Instagram login
-Admin add songs should use their spotify like user
 Add display name? Or use firstname last initial?
 Genre/artist search needs more seed tracks?
 Admin dashboard should show currently playing
 Change from passwords to text code verification
+
+BUGS:
+Recommended songs added have 0 popularity
+My library on user spotify only shows 50 songs even more can be loaded
+Scroll in Spotify browse for user and admin
 
 FINISHED NEEDS TESTING:
 User should be able to search by artist as well

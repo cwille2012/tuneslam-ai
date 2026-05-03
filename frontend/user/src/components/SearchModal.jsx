@@ -14,6 +14,9 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState([]);
   const [savedTracks, setSavedTracks] = useState([]);
+  const [savedTracksHasMore, setSavedTracksHasMore] = useState(false);
+  const [savedTracksOffset, setSavedTracksOffset] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Check Spotify link status when modal opens
   useEffect(() => {
@@ -54,14 +57,30 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
     try {
       const [playlistsRes, savedRes] = await Promise.all([
         userSpotifyAPI.getPlaylists(),
-        userSpotifyAPI.getSavedTracks()
+        userSpotifyAPI.getSavedTracks(0, 50)
       ]);
       setPlaylists(playlistsRes.data.playlists);
       setSavedTracks(savedRes.data.tracks);
+      setSavedTracksHasMore(savedRes.data.hasMore);
+      setSavedTracksOffset(savedRes.data.offset);
     } catch (error) {
       console.error('Load playlists error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreSavedTracks = async () => {
+    setLoadingMore(true);
+    try {
+      const response = await userSpotifyAPI.getSavedTracks(savedTracksOffset, 50);
+      setSavedTracks(prev => [...prev, ...response.data.tracks]);
+      setSavedTracksHasMore(response.data.hasMore);
+      setSavedTracksOffset(response.data.offset);
+    } catch (error) {
+      console.error('Load more saved tracks error:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -226,6 +245,8 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
     // Show playlist view if one is selected
     if (selectedPlaylist) {
       const playlist = playlists.find(p => p.id === selectedPlaylist);
+      const isLikedSongs = selectedPlaylist === 'liked';
+      const tracks = isLikedSongs ? savedTracks : playlistTracks;
       
       return (
         <>
@@ -235,10 +256,10 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
             </button>
             <div style={{ flex: 1, padding: '0 16px' }}>
               <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
-                {playlist?.name || 'Playlist'}
+                {isLikedSongs ? 'Liked Songs' : (playlist?.name || 'Playlist')}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--spotify-light-grey)' }}>
-                {playlistTracks.length} songs
+                {tracks.length} songs{isLikedSongs && savedTracksHasMore && '+'}
               </div>
             </div>
           </div>
@@ -249,34 +270,50 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
                 <div className="spinner" style={{ margin: '0 auto' }}></div>
               </div>
             ) : (
-              playlistTracks.map((track) => (
-                <div
-                  key={track.id}
-                  className="search-result-item"
-                  onClick={() => handleAddSong(track)}
-                  style={{
-                    opacity: adding === track.id ? 0.5 : 1,
-                    pointerEvents: adding ? 'none' : 'auto'
-                  }}
-                >
-                  <img
-                    src={track.albumArt}
-                    alt={track.title}
-                    className="song-artwork"
-                  />
-                  <div className="song-info">
-                    <div className="song-title">{track.title}</div>
-                    <div className="song-artist">
-                      {track.artist} • {formatDuration(track.duration)}
+              <>
+                {tracks.map((track) => (
+                  <div
+                    key={track.id}
+                    className="search-result-item"
+                    onClick={() => handleAddSong(track)}
+                    style={{
+                      opacity: adding === track.id ? 0.5 : 1,
+                      pointerEvents: adding ? 'none' : 'auto'
+                    }}
+                  >
+                    <img
+                      src={track.albumArt}
+                      alt={track.title}
+                      className="song-artwork"
+                    />
+                    <div className="song-info">
+                      <div className="song-title">{track.title}</div>
+                      <div className="song-artist">
+                        {track.artist} • {formatDuration(track.duration)}
+                      </div>
                     </div>
+                    {adding === track.id ? (
+                      <div style={{ color: 'var(--spotify-green)' }}>Adding...</div>
+                    ) : (
+                      <div style={{ color: 'var(--spotify-green)', fontSize: '24px' }}>+</div>
+                    )}
                   </div>
-                  {adding === track.id ? (
-                    <div style={{ color: 'var(--spotify-green)' }}>Adding...</div>
-                  ) : (
-                    <div style={{ color: 'var(--spotify-green)', fontSize: '24px' }}>+</div>
-                  )}
-                </div>
-              ))
+                ))}
+
+                {/* Load More button for Liked Songs */}
+                {isLikedSongs && savedTracksHasMore && (
+                  <div style={{ padding: '16px', textAlign: 'center' }}>
+                    <button
+                      onClick={loadMoreSavedTracks}
+                      disabled={loadingMore}
+                      className="btn btn-secondary"
+                      style={{ width: '100%' }}
+                    >
+                      {loadingMore ? 'Loading...' : 'Load More Songs'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
