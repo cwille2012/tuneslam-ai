@@ -18,6 +18,14 @@ console.log('🔍 Spotify Config Check:', {
   redirectUri: process.env.SPOTIFY_REDIRECT_URI
 });
 
+// Log Facebook config to verify it loaded
+console.log('🔍 Facebook Config Check:', {
+  hasAppId: !!process.env.FACEBOOK_APP_ID,
+  hasAppSecret: !!process.env.FACEBOOK_APP_SECRET,
+  hasCallbackUrl: !!process.env.FACEBOOK_CALLBACK_URL,
+  callbackUrl: process.env.FACEBOOK_CALLBACK_URL
+});
+
 // NOW import everything else
 import express from 'express';
 import { createServer } from 'http';
@@ -37,6 +45,9 @@ import spotifyRoutes from './routes/spotify.routes.js';
 
 // Import services
 import { startPlaybackMonitoring } from './services/playback.service.js';
+
+// Import passport and initialization function
+import passport, { initializePassport } from './config/passport.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -58,6 +69,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Health check
 app.get('/health', (req, res) => {
@@ -104,6 +118,9 @@ async function startServer() {
     // Initialize Socket.io
     initializeSocket(httpServer);
     console.log('✅ Socket.io initialized');
+
+    // Initialize Passport strategies (after env vars are loaded)
+    initializePassport();
 
     // Start playback monitoring
     startPlaybackMonitoring();

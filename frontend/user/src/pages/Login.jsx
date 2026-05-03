@@ -10,17 +10,18 @@ function Login() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Get redirect URL from query params
+  const getRedirectUrl = () => {
+    const params = new URLSearchParams(location.search);
+    return params.get('redirect') || '/profile';
+  };
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      const redirectTo = new URLSearchParams(location.search).get('redirect');
-      if (redirectTo) {
-        navigate(redirectTo);
-      } else {
-        // If no redirect, go to profile page
-        navigate('/profile');
-      }
+      const redirectTo = getRedirectUrl();
+      navigate(redirectTo);
     }
   }, [user, navigate, location]);
 
@@ -76,6 +77,31 @@ function Login() {
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Logging in...' : 'Log In'}
+          </button>
+
+          <div style={{ 
+            textAlign: 'center', 
+            margin: '20px 0', 
+            color: 'var(--spotify-light-grey)',
+            fontSize: '14px'
+          }}>
+            or continue with
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              // Pass redirect URL in state parameter
+              const redirectTo = getRedirectUrl();
+              const stateParam = redirectTo !== '/profile' ? `&state=${encodeURIComponent(redirectTo)}` : '';
+              window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/facebook?${stateParam}`;
+            }}
+            disabled={loading}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            <span style={{ fontSize: '20px' }}>📘</span>
+            Continue with Facebook
           </button>
         </form>
 

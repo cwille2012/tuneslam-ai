@@ -8,8 +8,9 @@ Check karma stats are properly being added to database
 Is the votes db in mongo scalable?
 Make services and connect to tuneslam.com
 Should down votes be a thing?
-User login with spotify
-User login with Facebook/Instagram/Google
+User login with spotify. Connect spotify account instead. Not used as login.
+Add Instagram login
+Add display name? Or use firstname last initial?
 Genre/artist search needs more seed tracks?
 Admin dashboard should show currently playing
 Change from passwords to text code verification

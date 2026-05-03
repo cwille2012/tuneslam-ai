@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import SessionView from './pages/SessionView';
 import ProfileSettings from './pages/ProfileSettings';
+import OAuthCallback from './pages/OAuthCallback';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -30,6 +31,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/session/:sessionName" element={
             <ProtectedRoute>
               <SessionView />

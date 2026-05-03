@@ -68,8 +68,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('tuneslam_user_data', JSON.stringify(newUserData));
   };
 
+  const setAuthData = (userData, token) => {
+    localStorage.setItem('tuneslam_user_token', token);
+    localStorage.setItem('tuneslam_user_data', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, setAuthData }}>
       {children}
     </AuthContext.Provider>
   );

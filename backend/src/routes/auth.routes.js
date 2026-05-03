@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import * as authController from '../controllers/auth.controller.js';
 import { authenticate, requireAdmin } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
+import passport from '../config/passport.js';
 
 const router = express.Router();
 
@@ -75,6 +76,26 @@ router.put('/password',
     validate
   ],
   authController.changePassword
+);
+
+// OAuth Routes - Facebook
+router.get('/facebook', (req, res, next) => {
+  // Preserve state parameter (contains redirect URL)
+  const state = req.query.state;
+  
+  passport.authenticate('facebook', { 
+    scope: ['email', 'public_profile'],
+    session: false,
+    state: state // Pass through state
+  })(req, res, next);
+});
+
+router.get('/facebook/callback',
+  passport.authenticate('facebook', { 
+    session: false,
+    failureRedirect: `${process.env.USER_URL}/login?error=Facebook authentication failed`
+  }),
+  authController.facebookCallback
 );
 
 export default router;

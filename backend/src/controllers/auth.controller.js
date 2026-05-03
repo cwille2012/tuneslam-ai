@@ -1,4 +1,5 @@
 import * as authService from '../services/auth.service.js';
+import jwt from 'jsonwebtoken';
 
 export const registerUser = async (req, res) => {
   try {
@@ -152,3 +153,37 @@ export const changePassword = async (req, res) => {
     });
   }
 };
+
+// OAuth Callbacks
+export const facebookCallback = async (req, res) => {
+  try {
+    // User is attached by passport after successful auth
+    const user = req.user;
+    
+    if (!user) {
+      return res.redirect(`${process.env.USER_URL}/login?error=Authentication failed`);
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, username: user.username, isAdmin: user.isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    
+    // Extract state parameter (contains redirect URL)
+    const state = req.query.state;
+    
+    // Redirect to user frontend with token and optional redirect
+    let redirectUrl = `${process.env.USER_URL}/oauth-callback?token=${token}`;
+    if (state) {
+      redirectUrl += `&redirect=${encodeURIComponent(state)}`;
+    }
+    
+    res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('Facebook callback error:', error);
+    res.redirect(`${process.env.USER_URL}/login?error=Authentication failed`);
+  }
+};
+

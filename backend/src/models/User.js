@@ -10,22 +10,55 @@ const userSchema = new mongoose.Schema({
     minlength: 3,
     maxlength: 30
   },
+  firstName: {
+    type: String,
+    trim: true
+  },
+  lastName: {
+    type: String,
+    trim: true
+  },
   email: {
     type: String,
-    required: true,
+    required: function() { 
+      // Email required for local auth and admin
+      return this.authProvider === 'local' || this.isAdmin;
+    },
     unique: true,
+    sparse: true,
     lowercase: true,
     trim: true
   },
   phoneNumber: {
     type: String,
-    required: true,
+    required: function() {
+      // Phone required only for local auth
+      return this.authProvider === 'local';
+    },
     unique: true,
+    sparse: true,
     trim: true
   },
   passwordHash: {
     type: String,
-    required: true
+    required: function() {
+      // Password required only for local auth
+      return this.authProvider === 'local';
+    }
+  },
+  // OAuth Fields
+  authProvider: {
+    type: String,
+    enum: ['local', 'facebook'],
+    default: 'local'
+  },
+  facebookId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  profilePicture: {
+    type: String
   },
   isAdmin: {
     type: Boolean,
