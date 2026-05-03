@@ -60,6 +60,22 @@ const userSchema = new mongoose.Schema({
   profilePicture: {
     type: String
   },
+  // User's Personal Spotify (for library browsing only)
+  spotifyAccessToken: {
+    type: String
+  },
+  spotifyRefreshToken: {
+    type: String
+  },
+  spotifyUserId: {
+    type: String
+  },
+  spotifyLinkedAt: {
+    type: Date
+  },
+  spotifyTokenExpires: {
+    type: Date
+  },
   isAdmin: {
     type: Boolean,
     default: false

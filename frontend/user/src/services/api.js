@@ -55,7 +55,16 @@ export const queueAPI = {
 
 // Spotify APIs
 export const spotifyAPI = {
-  search: (sessionName, query, limit = 20) => api.get(`/spotify/search/${sessionName}?query=${query}&limit=${limit}`)
+  search: (sessionName, query) => api.get(`/spotify/search/${sessionName}`, { params: { query } })
+};
+
+export const userSpotifyAPI = {
+  getAuthUrl: () => api.get('/user/spotify/auth-url'),
+  getStatus: () => api.get('/user/spotify/status'),
+  getPlaylists: () => api.get('/user/spotify/playlists'),
+  getPlaylistTracks: (playlistId) => api.get(`/user/spotify/playlists/${playlistId}/tracks`),
+  getSavedTracks: () => api.get('/user/spotify/saved-tracks'),
+  unlink: () => api.delete('/user/spotify/unlink')
 };
 
 // User APIs

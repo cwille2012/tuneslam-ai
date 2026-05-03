@@ -14,8 +14,10 @@ dotenv.config({ path: join(__dirname, '../.env') });
 console.log('🔍 Spotify Config Check:', {
   hasClientId: !!process.env.SPOTIFY_CLIENT_ID,
   hasClientSecret: !!process.env.SPOTIFY_CLIENT_SECRET,
-  hasRedirectUri: !!process.env.SPOTIFY_REDIRECT_URI,
-  redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  hasAdminRedirectUri: !!process.env.SPOTIFY_REDIRECT_ADMIN_URI,
+  hasUserRedirectUri: !!process.env.SPOTIFY_REDIRECT_USER_URI,
+  adminRedirectUri: process.env.SPOTIFY_REDIRECT_ADMIN_URI,
+  userRedirectUri: process.env.SPOTIFY_REDIRECT_USER_URI
 });
 
 // Log Facebook config to verify it loaded
@@ -42,6 +44,7 @@ import sessionRoutes from './routes/session.routes.js';
 import queueRoutes from './routes/queue.routes.js';
 import userRoutes from './routes/user.routes.js';
 import spotifyRoutes from './routes/spotify.routes.js';
+import userSpotifyRoutes from './routes/user-spotify.routes.js';
 
 // Import services
 import { startPlaybackMonitoring } from './services/playback.service.js';
@@ -84,6 +87,7 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/sessions', queueRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/spotify', spotifyRoutes);
+app.use('/api/user/spotify', userSpotifyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

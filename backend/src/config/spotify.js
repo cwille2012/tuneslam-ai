@@ -7,7 +7,7 @@ export const spotifyConfig = {
     return process.env.SPOTIFY_CLIENT_SECRET;
   },
   get redirectUri() {
-    return process.env.SPOTIFY_REDIRECT_URI;
+    return process.env.SPOTIFY_REDIRECT_ADMIN_URI;
   },
   get scopes() {
     return [

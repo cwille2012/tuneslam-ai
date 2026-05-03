@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { authAPI, userSpotifyAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 function ProfileSettings() {
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState(user?.username || '');
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -15,6 +16,63 @@ function ProfileSettings() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [spotifyStatus, setSpotifyStatus] = useState({ linked: false, loading: true });
+
+  // Check for Spotify callback messages
+  useEffect(() => {
+    const spotifyParam = searchParams.get('spotify');
+    const errorParam = searchParams.get('error');
+    
+    if (spotifyParam === 'linked') {
+      setMessage('✅ Spotify linked successfully!');
+      // Clear URL params
+      window.history.replaceState({}, '', '/profile');
+    } else if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+      window.history.replaceState({}, '', '/profile');
+    }
+  }, [searchParams]);
+
+  // Fetch Spotify status
+  useEffect(() => {
+    fetchSpotifyStatus();
+  }, []);
+
+  const fetchSpotifyStatus = async () => {
+    try {
+      const response = await userSpotifyAPI.getStatus();
+      setSpotifyStatus({ linked: response.data.linked, loading: false });
+    } catch (err) {
+      console.error('Failed to fetch Spotify status:', err);
+      setSpotifyStatus({ linked: false, loading: false });
+    }
+  };
+
+  const handleLinkSpotify = async () => {
+    try {
+      const response = await userSpotifyAPI.getAuthUrl();
+      window.location.href = response.data.authUrl;
+    } catch (err) {
+      setError('Failed to initiate Spotify linking');
+    }
+  };
+
+  const handleUnlinkSpotify = async () => {
+    if (!confirm('Are you sure you want to unlink your Spotify account?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await userSpotifyAPI.unlink();
+      setSpotifyStatus({ linked: false, loading: false });
+      setMessage('Spotify unlinked successfully');
+    } catch (err) {
+      setError('Failed to unlink Spotify');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUsernameSubmit = async (e) => {
     e.preventDefault();
@@ -181,6 +239,63 @@ function ProfileSettings() {
               {loading ? 'Changing...' : 'Change Password'}
             </button>
           </form>
+        </div>
+
+        <div style={{
+          background: 'var(--spotify-dark-grey)',
+          borderRadius: '8px',
+          padding: '24px',
+          marginBottom: '16px'
+        }}>
+          <h3 style={{ marginBottom: '16px' }}>🎵 Spotify Connection</h3>
+          <p style={{ color: 'var(--spotify-light-grey)', marginBottom: '16px', fontSize: '14px' }}>
+            Link your Spotify account to browse your personal playlists and library when adding songs.
+          </p>
+          
+          {spotifyStatus.loading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <div className="spinner" style={{ margin: '0 auto' }}></div>
+            </div>
+          ) : spotifyStatus.linked ? (
+            <div>
+              <div style={{
+                padding: '12px',
+                background: 'rgba(30, 215, 96, 0.1)',
+                borderRadius: '8px',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <span style={{ fontSize: '24px' }}>✓</span>
+                <div>
+                  <div style={{ color: 'var(--spotify-green)', fontWeight: '600' }}>
+                    Spotify Connected
+                  </div>
+                  <div style={{ color: 'var(--spotify-light-grey)', fontSize: '14px' }}>
+                    You can now browse your playlists when adding songs
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleUnlinkSpotify}
+                className="btn btn-secondary"
+                disabled={loading}
+                style={{ width: '100%' }}
+              >
+                Unlink Spotify
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleLinkSpotify}
+              className="btn btn-primary"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <span style={{ fontSize: '20px' }}>🎵</span>
+              Link Spotify Account
+            </button>
+          )}
         </div>
 
         <div style={{
