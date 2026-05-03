@@ -11,7 +11,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('tuneslam_user_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,8 +23,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('tuneslam_user_token');
+      localStorage.removeItem('tuneslam_user_data');
       window.location.href = '/login';
     }
     return Promise.reject(error);

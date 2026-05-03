@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { queueAPI } from '../services/api';
 
 function QueueItem({ song, index, sessionName, currentUserId, onVoteUpdate }) {
-  const [userVote, setUserVote] = useState(null);
+  const [userVote, setUserVote] = useState(song.userVote || null);
   const [voting, setVoting] = useState(false);
+  
+  // Update userVote when song prop changes (from socket updates)
+  useEffect(() => {
+    setUserVote(song.userVote || null);
+  }, [song.userVote, song._id]);
   
   // Check if this is the user's own song
   const isOwnSong = currentUserId && song.addedBy?._id === currentUserId;

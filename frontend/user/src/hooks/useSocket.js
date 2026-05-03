@@ -8,7 +8,7 @@ export const useSocket = (sessionName) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('tuneslam_user_token');
     
     if (!token || !sessionName) return;
 

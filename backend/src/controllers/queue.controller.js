@@ -6,6 +6,7 @@ import * as votingService from '../services/voting.service.js';
 export const getQueue = async (req, res) => {
   try {
     const { sessionName } = req.params;
+    const userId = req.userId; // From auth middleware
     
     const session = await Session.findOne({ name: sessionName });
     
@@ -16,7 +17,7 @@ export const getQueue = async (req, res) => {
       });
     }
     
-    const queue = await queueService.getQueue(session._id);
+    const queue = await queueService.getQueue(session._id, userId);
     
     res.json({
       success: true,
@@ -141,6 +142,48 @@ export const getUserVote = async (req, res) => {
     res.json({
       success: true,
       voteType
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+export const getHistory = async (req, res) => {
+  try {
+    const { sessionName } = req.params;
+    
+    const session = await Session.findOne({ name: sessionName });
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+    
+    // Check if user is session owner
+    if (session.ownerId.toString() !== req.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only session owner can view history'
+      });
+    }
+    
+    // Get played and removed songs
+    const history = await Song.find({
+      sessionId: session._id,
+      status: { $in: ['played', 'removed'] }
+    })
+    .populate('addedBy', 'username')
+    .sort({ playedAt: -1, removedAt: -1, createdAt: -1 })
+    .limit(50);
+    
+    res.json({
+      success: true,
+      history
     });
   } catch (error) {
     res.status(500).json({

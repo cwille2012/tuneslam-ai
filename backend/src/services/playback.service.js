@@ -113,6 +113,10 @@ const monitorSession = async (session) => {
           songId: nextSong._id,
           remainingSeconds
         });
+        
+        // Reorder queue to move locked song to top
+        const { reorderQueue } = await import('./queue.service.js');
+        await reorderQueue(session._id);
       }
     }
     
@@ -355,19 +359,9 @@ const fillQueue = async (session, currentQueue) => {
     }
 
     if (added > 0) {
-      // Sync to Spotify playlist
-      const { syncQueueToSpotify } = await import('./queue.service.js');
-      await syncQueueToSpotify(session._id);
-
-      // Emit queue update
-      const updatedQueue = await Song.find({
-        sessionId: session._id,
-        status: 'queued'
-      }).sort({ position: 1 });
-
-      emitToSession(session.name, 'queue-updated', {
-        queue: updatedQueue
-      });
+      // Reorder queue to properly sort new system songs by votes/date
+      const { reorderQueue } = await import('./queue.service.js');
+      await reorderQueue(session._id);
 
       console.log(`🎵 Auto-filled queue with ${added} songs using ${autoFillMode}`);
     }

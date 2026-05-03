@@ -56,6 +56,10 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Song'
   }],
+  songsDownvoted: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Song'
+  }],
   stats: {
     songsAddedCount: {
       type: Number,

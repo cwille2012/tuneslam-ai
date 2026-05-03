@@ -30,6 +30,12 @@ const songSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  popularity: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0  // Spotify popularity rating 0-100
+  },
   addedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

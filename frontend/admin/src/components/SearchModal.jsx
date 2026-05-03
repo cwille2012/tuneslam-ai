@@ -41,7 +41,8 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
         artist: track.artist,
         album: track.album,
         duration: track.duration,
-        albumArt: track.albumArt
+        albumArt: track.albumArt,
+        popularity: track.popularity
       };
       
       await queueAPI.addSong(sessionName, trackData);

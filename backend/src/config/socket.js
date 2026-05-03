@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 
 let io = null;
+const connectedUsers = new Map(); // sessionName -> Set of userIds
 
 export const initializeSocket = (httpServer) => {
   // Parse comma-separated CORS origins
@@ -53,7 +54,38 @@ export const initializeSocket = (httpServer) => {
     // Join session room
     socket.on('join-session', async (sessionName) => {
       socket.join(`session:${sessionName}`);
+      socket.currentSession = sessionName;
       console.log(`User ${socket.userId} joined session: ${sessionName}`);
+      
+      // Track connected user (all authenticated users including admins, but not anonymous viewers)
+      if (socket.userId && !socket.isViewer) {
+        if (!connectedUsers.has(sessionName)) {
+          connectedUsers.set(sessionName, new Set());
+        }
+        connectedUsers.get(sessionName).add(socket.userId);
+        
+        // Emit participant status update to everyone in this session
+        const connectedUserIds = Array.from(connectedUsers.get(sessionName));
+        io.to(`session:${sessionName}`).emit('participants-status', { 
+          connectedUsers: connectedUserIds 
+        });
+        console.log(`📡 User ${socket.userId} connected to session ${sessionName}. Total: ${connectedUserIds.length}`);
+      }
+      
+      // Send current participant status to newly joined socket (for admins viewing user management)
+      if (connectedUsers.has(sessionName)) {
+        const connectedUserIds = Array.from(connectedUsers.get(sessionName));
+        socket.emit('participants-status', { 
+          connectedUsers: connectedUserIds 
+        });
+        console.log(`📤 Sent current participant status to new joiner: ${connectedUserIds.length} users online`);
+      } else {
+        // No users tracked yet, send empty array
+        socket.emit('participants-status', { 
+          connectedUsers: [] 
+        });
+        console.log(`📤 Sent empty participant status to new joiner (no users online yet)`);
+      }
       
       // Send current state to newly joined client
       try {
@@ -104,11 +136,35 @@ export const initializeSocket = (httpServer) => {
     // Leave session room
     socket.on('leave-session', (sessionName) => {
       socket.leave(`session:${sessionName}`);
+      
+      // Remove from connected users (all authenticated users, not anonymous viewers)
+      if (socket.userId && !socket.isViewer && connectedUsers.has(sessionName)) {
+        connectedUsers.get(sessionName).delete(socket.userId);
+        const connectedUserIds = Array.from(connectedUsers.get(sessionName));
+        io.to(`session:${sessionName}`).emit('participants-status', { 
+          connectedUsers: connectedUserIds 
+        });
+        console.log(`📡 User ${socket.userId} disconnected from session ${sessionName}. Total: ${connectedUserIds.length}`);
+      }
+      
       console.log(`User ${socket.userId} left session: ${sessionName}`);
     });
 
     socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.userId}`);
+      console.log(`User disconnected: ${socket.userId} (isAdmin: ${socket.isAdmin})`);
+      
+      // Remove from all connected sessions (all authenticated users, not anonymous viewers)
+      if (socket.userId && !socket.isViewer && socket.currentSession) {
+        const sessionName = socket.currentSession;
+        if (connectedUsers.has(sessionName)) {
+          connectedUsers.get(sessionName).delete(socket.userId);
+          const connectedUserIds = Array.from(connectedUsers.get(sessionName));
+          io.to(`session:${sessionName}`).emit('participants-status', { 
+            connectedUsers: connectedUserIds 
+          });
+          console.log(`📡 User ${socket.userId} disconnected from session ${sessionName}. Total: ${connectedUserIds.length}`);
+        }
+      }
     });
   });
 

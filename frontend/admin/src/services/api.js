@@ -11,7 +11,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('tuneslam_admin_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,8 +23,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('tuneslam_admin_token');
+      localStorage.removeItem('tuneslam_admin_data');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -60,7 +60,8 @@ export const queueAPI = {
   get: (sessionName) => api.get(`/sessions/${sessionName}/queue`),
   addSong: (sessionName, trackData) => api.post(`/sessions/${sessionName}/queue`, { trackData }),
   removeSong: (sessionName, songId) => api.delete(`/sessions/${sessionName}/queue/${songId}`),
-  vote: (sessionName, songId, voteType) => api.post(`/sessions/${sessionName}/queue/${songId}/vote`, { voteType })
+  vote: (sessionName, songId, voteType) => api.post(`/sessions/${sessionName}/queue/${songId}/vote`, { voteType }),
+  getHistory: (sessionName) => api.get(`/sessions/${sessionName}/history`)
 };
 
 // Spotify APIs

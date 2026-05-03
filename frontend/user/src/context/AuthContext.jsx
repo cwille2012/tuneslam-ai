@@ -17,16 +17,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
+      const token = localStorage.getItem('tuneslam_user_token');
+      const storedUser = localStorage.getItem('tuneslam_user_data');
       
       if (token && storedUser) {
         try {
           const response = await authAPI.getMe();
           setUser(response.data.user);
         } catch (error) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          localStorage.removeItem('tuneslam_user_token');
+          localStorage.removeItem('tuneslam_user_data');
         }
       }
       setLoading(false);
@@ -39,8 +39,8 @@ export const AuthProvider = ({ children }) => {
     const response = await authAPI.login({ identifier, password });
     const { user, token } = response.data;
     
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('tuneslam_user_token', token);
+    localStorage.setItem('tuneslam_user_data', JSON.stringify(user));
     setUser(user);
     
     return user;
@@ -50,22 +50,22 @@ export const AuthProvider = ({ children }) => {
     const response = await authAPI.register(userData);
     const { user, token } = response.data;
     
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('tuneslam_user_token', token);
+    localStorage.setItem('tuneslam_user_data', JSON.stringify(user));
     setUser(user);
     
     return user;
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('tuneslam_user_token');
+    localStorage.removeItem('tuneslam_user_data');
     setUser(null);
   };
 
   const updateUser = (newUserData) => {
     setUser(newUserData);
-    localStorage.setItem('user', JSON.stringify(newUserData));
+    localStorage.setItem('tuneslam_user_data', JSON.stringify(newUserData));
   };
 
   return (

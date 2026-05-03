@@ -119,7 +119,8 @@ export const searchTracks = async (sessionId, query, limit = 20) => {
       album: track.album.name,
       duration: Math.floor(track.duration_ms / 1000),
       albumArt: track.album.images[0]?.url || '',
-      uri: track.uri
+      uri: track.uri,
+      popularity: track.popularity || 0  // Spotify popularity 0-100
     }));
   } catch (error) {
     console.error('Error searching tracks:', error.response?.data || error.message);

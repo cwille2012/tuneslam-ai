@@ -2,18 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { sessionAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../hooks/useSocket';
 import Header from '../components/Header';
 
 function UserManagement() {
   const { sessionName } = useParams();
   const { user } = useAuth();
   const [participants, setParticipants] = useState([]);
+  const [connectedUsers, setConnectedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { connected, on, off } = useSocket(sessionName);
 
   useEffect(() => {
     loadParticipants();
   }, [sessionName]);
+
+  useEffect(() => {
+    if (!connected) return;
+
+    const handleParticipantsStatus = (data) => {
+      setConnectedUsers(data.connectedUsers || []);
+    };
+
+    on('participants-status', handleParticipantsStatus);
+
+    return () => {
+      off('participants-status', handleParticipantsStatus);
+    };
+  }, [connected, on, off]);
 
   const loadParticipants = async () => {
     try {
@@ -96,7 +113,9 @@ function UserManagement() {
                   // Fix: Extract userId properly (might be object or string)
                   const participantId = participant.userId?._id || participant.userId;
                   // Fix: Check if this is the admin's own account (convert both to strings)
-                  const isOwnAccount = String(user?._id) === String(participantId);
+                  const isOwnAccount = String(user?.id) === String(participantId);
+                  // Check if this participant is an admin
+                  const isAdmin = participant.userId?.isAdmin || false;
                   // Fix: Handle songsAdded as array or number
                   const songsCount = Array.isArray(participant.songsAdded) 
                     ? participant.songsAdded.length 
@@ -130,17 +149,29 @@ function UserManagement() {
                       </td>
                       <td style={{ padding: '12px' }}>
                         {participant.isBlocked ? (
-                          <span style={{ color: 'var(--error-color)', fontWeight: '600' }}>
+                          <span style={{ color: '#E22134', fontWeight: '600' }}>
                             🚫 Blocked
                           </span>
+                        ) : connectedUsers.includes(String(participantId)) ? (
+                          <span style={{ color: '#1DB954', fontWeight: '600' }}>
+                            🟢 Online
+                          </span>
                         ) : (
-                          <span style={{ color: 'var(--success-color)' }}>
-                            ✅ Active
+                          <span style={{ color: '#888', fontWeight: '500' }}>
+                            ⚪ Offline
                           </span>
                         )}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
-                        {isOwnAccount ? (
+                        {isAdmin ? (
+                          <span style={{ 
+                            color: 'var(--primary-color)', 
+                            fontSize: '14px',
+                            fontWeight: '600'
+                          }}>
+                            👤 Admin User
+                          </span>
+                        ) : isOwnAccount ? (
                           <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                             (Your Account)
                           </span>

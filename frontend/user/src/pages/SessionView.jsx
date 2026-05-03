@@ -28,7 +28,8 @@ function SessionView() {
     if (!connected) return;
 
     const handleQueueUpdated = (data) => {
-      setQueue(data.queue || []);
+      // Fetch queue from API to get userVote data for current user
+      loadQueue();
     };
 
     const handleSongAdded = () => {
@@ -40,7 +41,7 @@ function SessionView() {
     };
 
     const handleVotesChanged = () => {
-      loadQueue();
+      // loadQueue will be called by handleQueueUpdated
     };
 
     const handleNowPlayingUpdated = (data) => {
@@ -235,7 +236,7 @@ function SessionView() {
               song={song}
               index={index}
               sessionName={sessionName}
-              currentUserId={user?._id}
+              currentUserId={user?.id}
               onVoteUpdate={loadQueue}
             />
           ))

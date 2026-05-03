@@ -53,6 +53,7 @@ export const addSongToQueue = async (sessionId, userId, trackData) => {
     album: trackData.album,
     duration: trackData.duration,
     albumArtUrl: trackData.albumArt,
+    popularity: trackData.popularity || 0,
     addedBy: userId,
     upvotes: 0,
     downvotes: 0,
@@ -133,13 +134,39 @@ export const removeSongFromQueue = async (sessionId, songId, reason = 'admin') =
   return song;
 };
 
-export const getQueue = async (sessionId) => {
+export const getQueue = async (sessionId, userId = null) => {
   const songs = await Song.find({
     sessionId,
     status: { $in: ['queued', 'playing'] }
   })
     .populate('addedBy', 'username karma')
     .sort({ status: -1, netVotes: -1, addedAt: 1 });
+  
+  // If userId provided, add userVote field to each song
+  if (userId) {
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(userId);
+    
+    if (user) {
+      // Convert Mongoose documents to plain objects so we can add userVote
+      const plainSongs = songs.map(song => {
+        const plainSong = song.toObject();
+        const songIdStr = song._id.toString();
+        
+        if (user.songsUpvoted && user.songsUpvoted.some(id => id.toString() === songIdStr)) {
+          plainSong.userVote = 'up';
+        } else if (user.songsDownvoted && user.songsDownvoted.some(id => id.toString() === songIdStr)) {
+          plainSong.userVote = 'down';
+        } else {
+          plainSong.userVote = null;
+        }
+        
+        return plainSong;
+      });
+      
+      return plainSongs;
+    }
+  }
   
   return songs;
 };
@@ -231,7 +258,7 @@ export const reorderQueue = async (sessionId) => {
   const allSongs = await Song.find({
     sessionId,
     status: 'queued'
-  });
+  }).populate('addedBy', '_id username karma');
   
   // Separate locked and unlocked songs
   const lockedSongs = allSongs.filter(s => s.isLocked);

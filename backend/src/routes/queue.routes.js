@@ -54,4 +54,10 @@ router.get('/:sessionName/queue/:songId/vote',
   queueController.getUserVote
 );
 
+// Get session history (admin only)
+router.get('/:sessionName/history',
+  authenticate,
+  queueController.getHistory
+);
+
 export default router;

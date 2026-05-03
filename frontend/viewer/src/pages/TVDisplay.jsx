@@ -15,8 +15,8 @@ function TVDisplay() {
   const [error, setError] = useState('');
   
   // For viewer, we need a token - in production, admin would provide this
-  // For now, we'll use localStorage token if available
-  const token = localStorage.getItem('token');
+  // For now, we'll use localStorage admin token (since viewer is opened by admin)
+  const token = localStorage.getItem('tuneslam_admin_token');
   const { connected, on, off } = useSocket(sessionName, token);
 
   useEffect(() => {
@@ -31,7 +31,9 @@ function TVDisplay() {
     const handleQueueUpdated = (data) => {
       console.log('📋 queue-updated received:', data);
       if (data.queue) {
-        setQueue(data.queue);
+        // Filter to only show queued songs, not currently playing
+        const queued = data.queue.filter(s => s.status === 'queued');
+        setQueue(queued);
       }
     };
 
@@ -47,7 +49,7 @@ function TVDisplay() {
 
     const handleVotesChanged = () => {
       console.log('🗳️ votes-changed received');
-      loadQueue();
+      // No need to loadQueue - handleQueueUpdated already has the sorted queue from socket
     };
 
     const handleNowPlayingUpdated = (data) => {

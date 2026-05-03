@@ -291,7 +291,7 @@ export const getParticipants = async (req, res) => {
     const { sessionName } = req.params;
     
     const session = await Session.findOne({ name: sessionName })
-      .populate('participants.userId', 'username karma stats');
+      .populate('participants.userId', 'username karma stats isAdmin');
     
     if (!session) {
       return res.status(404).json({

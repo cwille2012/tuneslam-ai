@@ -44,77 +44,40 @@ export const castVote = async (sessionId, songId, userId, voteType) => {
   const songOwner = await User.findById(song.addedBy);
   
   if (vote) {
-    // User is changing their vote
+    // User already voted - remove the vote (regardless of same or different type)
     const oldVoteType = vote.voteType;
+    await Vote.deleteOne({ _id: vote._id });
     
-    if (oldVoteType === voteType) {
-      // Same vote type, so remove vote
-      await Vote.deleteOne({ _id: vote._id });
-      
-      // Update song votes
-      if (voteType === 'up') {
-        song.upvotes = Math.max(0, song.upvotes - 1);
-        // Remove from user's upvoted songs
-        if (user && user.songsUpvoted.includes(songId)) {
-          user.songsUpvoted = user.songsUpvoted.filter(id => id.toString() !== songId.toString());
-          await user.save();
-        }
-        // Update song owner karma
-        if (songOwner) {
-          songOwner.karma = Math.max(0, songOwner.karma - 1);
-          songOwner.stats.upvotesReceived = Math.max(0, songOwner.stats.upvotesReceived - 1);
-          await songOwner.save();
-        }
-      } else {
-        song.downvotes = Math.max(0, song.downvotes - 1);
-        // Update song owner karma
-        if (songOwner) {
-          songOwner.karma++;
-          songOwner.stats.downvotesReceived = Math.max(0, songOwner.stats.downvotesReceived - 1);
-          await songOwner.save();
-        }
+    // Update song votes based on what we're removing
+    if (oldVoteType === 'up') {
+      song.upvotes = Math.max(0, song.upvotes - 1);
+      // Remove from user's upvoted songs
+      if (user && user.songsUpvoted.includes(songId)) {
+        user.songsUpvoted = user.songsUpvoted.filter(id => id.toString() !== songId.toString());
+        await user.save();
       }
-      
-      vote = null;
+      // Update song owner karma
+      if (songOwner) {
+        songOwner.karma = Math.max(0, songOwner.karma - 1);
+        songOwner.stats.upvotesReceived = Math.max(0, songOwner.stats.upvotesReceived - 1);
+        await songOwner.save();
+      }
     } else {
-      // Changing from up to down or vice versa
-      vote.voteType = voteType;
-      vote.updatedAt = new Date();
-      await vote.save();
-      
-      // Update song votes
-      if (voteType === 'up') {
-        song.upvotes++;
-        song.downvotes = Math.max(0, song.downvotes - 1);
-        // Add to upvoted songs
-        if (user && !user.songsUpvoted.includes(songId)) {
-          user.songsUpvoted.push(songId);
-          await user.save();
-        }
-        // Update song owner karma (+2 because removing downvote and adding upvote)
-        if (songOwner) {
-          songOwner.karma += 2;
-          songOwner.stats.upvotesReceived++;
-          songOwner.stats.downvotesReceived = Math.max(0, songOwner.stats.downvotesReceived - 1);
-          await songOwner.save();
-        }
-      } else {
-        song.downvotes++;
-        song.upvotes = Math.max(0, song.upvotes - 1);
-        // Remove from upvoted songs
-        if (user && user.songsUpvoted.includes(songId)) {
-          user.songsUpvoted = user.songsUpvoted.filter(id => id.toString() !== songId.toString());
-          await user.save();
-        }
-        // Update song owner karma (-2 because removing upvote and adding downvote)
-        if (songOwner) {
-          songOwner.karma -= 2;
-          songOwner.stats.downvotesReceived++;
-          songOwner.stats.upvotesReceived = Math.max(0, songOwner.stats.upvotesReceived - 1);
-          await songOwner.save();
-        }
+      song.downvotes = Math.max(0, song.downvotes - 1);
+      // Remove from user's downvoted songs
+      if (user && user.songsDownvoted.includes(songId)) {
+        user.songsDownvoted = user.songsDownvoted.filter(id => id.toString() !== songId.toString());
+        await user.save();
+      }
+      // Update song owner karma
+      if (songOwner) {
+        songOwner.karma++;
+        songOwner.stats.downvotesReceived = Math.max(0, songOwner.stats.downvotesReceived - 1);
+        await songOwner.save();
       }
     }
+    
+    vote = null;
   } else {
     // New vote
     vote = new Vote({
@@ -141,6 +104,11 @@ export const castVote = async (sessionId, songId, userId, voteType) => {
       }
     } else {
       song.downvotes++;
+      // Add to user's downvoted songs
+      if (user && !user.songsDownvoted.includes(songId)) {
+        user.songsDownvoted.push(songId);
+        await user.save();
+      }
       // Update song owner karma
       if (songOwner) {
         songOwner.karma--;
