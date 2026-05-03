@@ -48,6 +48,7 @@ export const sessionAPI = {
   update: (sessionName, data) => api.put(`/sessions/${sessionName}`, data),
   toggle: (sessionName) => api.post(`/sessions/${sessionName}/toggle`),
   delete: (sessionName) => api.delete(`/sessions/${sessionName}`),
+  reset: (sessionName) => api.post(`/sessions/${sessionName}/reset`),
   getParticipants: (sessionName) => api.get(`/sessions/${sessionName}/participants`),
   blockUser: (sessionName, userId) => api.post(`/sessions/${sessionName}/participants/${userId}/block`),
   unblockUser: (sessionName, userId) => api.post(`/sessions/${sessionName}/participants/${userId}/unblock`),
@@ -58,7 +59,7 @@ export const sessionAPI = {
 // Queue APIs
 export const queueAPI = {
   get: (sessionName) => api.get(`/sessions/${sessionName}/queue`),
-  addSong: (sessionName, trackData) => api.post(`/sessions/${sessionName}/queue`, { trackData }),
+  addSong: (sessionName, trackData, options = {}) => api.post(`/sessions/${sessionName}/queue`, { trackData, ...options }),
   removeSong: (sessionName, songId) => api.delete(`/sessions/${sessionName}/queue/${songId}`),
   vote: (sessionName, songId, voteType) => api.post(`/sessions/${sessionName}/queue/${songId}/vote`, { voteType }),
   getHistory: (sessionName) => api.get(`/sessions/${sessionName}/history`)

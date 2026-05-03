@@ -56,7 +56,35 @@ function SearchModal({ isOpen, onClose, sessionName, onSongAdded }) {
       onClose();
     } catch (error) {
       console.error('Add song error:', error);
-      alert(error.response?.data?.error || 'Failed to add song');
+      const errorMessage = error.response?.data?.error || 'Failed to add song';
+      
+      // Check if this is a validation error (400 status)
+      if (error.response?.status === 400) {
+        // Show confirmation dialog for admin override
+        const confirmed = window.confirm(
+          `⚠️ ${errorMessage}\n\nAs admin, do you want to add this song anyway?`
+        );
+        
+        if (confirmed) {
+          try {
+            // Retry with admin override
+            await queueAPI.addSong(sessionName, trackData, { adminOverride: true });
+            
+            if (onSongAdded) {
+              onSongAdded();
+            }
+            
+            setQuery('');
+            setResults([]);
+            onClose();
+            return;
+          } catch (retryError) {
+            alert(retryError.response?.data?.error || 'Failed to add song with override');
+          }
+        }
+      } else {
+        alert(errorMessage);
+      }
     } finally {
       setAdding(null);
     }

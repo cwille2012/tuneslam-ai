@@ -73,6 +73,13 @@ function TVDisplay() {
       ));
     };
 
+    const handleSessionReset = () => {
+      console.log('🔄 session-reset received');
+      setQueue([]);
+      setCurrentlyPlaying(null);
+      setProgress(null);
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
@@ -80,6 +87,7 @@ function TVDisplay() {
     on('now-playing-updated', handleNowPlayingUpdated);
     on('playback-progress', handlePlaybackProgress);
     on('song-locked', handleSongLocked);
+    on('session-reset', handleSessionReset);
 
     console.log('✅ All socket handlers registered');
 
@@ -91,6 +99,7 @@ function TVDisplay() {
       off('now-playing-updated', handleNowPlayingUpdated);
       off('playback-progress', handlePlaybackProgress);
       off('song-locked', handleSongLocked);
+      off('session-reset', handleSessionReset);
     };
   }, [connected, on, off]);
 

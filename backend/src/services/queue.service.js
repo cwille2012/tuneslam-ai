@@ -3,9 +3,10 @@ import { emitToSession } from '../config/socket.js';
 import Session from '../models/Session.js';
 import Song from '../models/Song.js';
 import User from '../models/User.js';
+import Vote from '../models/Vote.js';
 import { updatePlaylistTracks } from './spotify.service.js';
 
-export const addSongToQueue = async (sessionId, userId, trackData) => {
+export const addSongToQueue = async (sessionId, userId, trackData, adminOverride = false) => {
   const session = await Session.findById(sessionId);
   
   if (!session) {
@@ -17,23 +18,35 @@ export const addSongToQueue = async (sessionId, userId, trackData) => {
     throw new Error('Session is not currently active');
   }
   
-  // Check if user is blocked
-  if (session.isUserBlocked(userId)) {
-    throw new Error('You have been blocked from this session');
+  // Check if user is session owner (for admin override)
+  const isOwner = session.ownerId.toString() === userId.toString();
+  
+  // Only apply validation if not admin override OR if user is not owner
+  if (!adminOverride || !isOwner) {
+    // Check if user is blocked
+    if (session.isUserBlocked(userId)) {
+      throw new Error('You have been blocked from this session');
+    }
+    
+    // Check if song is blacklisted
+    if (session.blacklist.includes(trackData.spotifyTrackId)) {
+      throw new Error('This song has been blacklisted by the session admin');
+    }
+    
+    // Check song duration against max
+    if (trackData.duration > session.settings.maxSongDuration) {
+      const maxMinutes = Math.floor(session.settings.maxSongDuration / 60);
+      throw new Error(`Song exceeds maximum duration of ${maxMinutes} minutes`);
+    }
+    
+    // Check song popularity against minimum
+    const minPopularity = session.settings.minSongPopularity || 0;
+    if (trackData.popularity < minPopularity) {
+      throw new Error(`Song must have at least ${minPopularity} popularity (this song: ${trackData.popularity})`);
+    }
   }
   
-  // Check if song is blacklisted
-  if (session.blacklist.includes(trackData.spotifyTrackId)) {
-    throw new Error('This song has been blacklisted by the session admin');
-  }
-  
-  // Check song duration against max
-  if (trackData.duration > session.settings.maxSongDuration) {
-    const maxMinutes = Math.floor(session.settings.maxSongDuration / 60);
-    throw new Error(`Song exceeds maximum duration of ${maxMinutes} minutes`);
-  }
-  
-  // Check if song already exists in queue
+  // Always check for duplicates (even for admins)
   const existingSong = await Song.findOne({
     sessionId,
     spotifyTrackId: trackData.spotifyTrackId,
@@ -254,7 +267,44 @@ export const checkAndRemoveDownvotedSongs = async (sessionId) => {
   return songs.length;
 };
 
+export const resetSessionQueue = async (sessionId) => {
+  const session = await Session.findById(sessionId);
+  
+  if (!session) {
+    throw new Error('Session not found');
+  }
+  
+  // Get all songs for this session (queued, playing, played, removed)
+  const songs = await Song.find({ sessionId });
+  const songIds = songs.map(s => s._id);
+  
+  // Delete all votes associated with these songs
+  await Vote.deleteMany({ songId: { $in: songIds } });
+  
+  // Delete all songs
+  await Song.deleteMany({ sessionId });
+  
+  // Clear Redis cache
+  await updateQueueCache(sessionId);
+  
+  // Clear Spotify playlist
+  if (session.tuneslamPlaylistId) {
+    await updatePlaylistTracks(sessionId, session.tuneslamPlaylistId, []);
+  }
+  
+  // Emit socket event
+  emitToSession(session.name, 'session-reset', {});
+  
+  return { success: true, songsCleared: songs.length };
+};
+
 export const reorderQueue = async (sessionId) => {
+  // Get current top song BEFORE reordering (for optimization)
+  const currentTopSong = await Song.findOne({
+    sessionId,
+    status: 'queued'
+  }).sort({ position: 1 });
+  
   const allSongs = await Song.find({
     sessionId,
     status: 'queued'
@@ -281,8 +331,19 @@ export const reorderQueue = async (sessionId) => {
     await orderedSongs[i].save();
   }
   
+  // Check if top song changed
+  const newTopSong = orderedSongs[0];
+  const topSongChanged = !currentTopSong || 
+    !newTopSong ||
+    currentTopSong._id.toString() !== newTopSong._id.toString();
+  
   await updateQueueCache(sessionId);
-  await syncQueueToSpotify(sessionId);
+  
+  // Only sync Spotify if the top (next to play) song changed
+  // This significantly reduces API calls while maintaining correct playback order
+  if (topSongChanged) {
+    await syncQueueToSpotify(sessionId);
+  }
   
   const session = await Session.findById(sessionId);
   emitToSession(session.name, 'queue-updated', { queue: orderedSongs });

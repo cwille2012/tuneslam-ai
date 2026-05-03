@@ -314,6 +314,15 @@ const fillQueue = async (session, currentQueue) => {
       case 'genre-search':
         tracks = await getGenreBasedTracks(session._id, recentSongs, songsNeeded + 5);
         break;
+      
+      case 'custom-playlist':
+        if (!session.settings.customPlaylistId) {
+          console.log('⚠️ Custom playlist mode selected but no playlist ID configured');
+          return;
+        }
+        const { getPlaylistTracks } = await import('./spotify.service.js');
+        tracks = await getPlaylistTracks(session._id, session.settings.customPlaylistId, songsNeeded + 5);
+        break;
         
       default:
         console.log(`Unknown auto-fill mode: ${autoFillMode}`);

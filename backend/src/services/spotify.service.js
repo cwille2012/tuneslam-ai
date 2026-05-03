@@ -101,6 +101,8 @@ export const searchTracks = async (sessionId, query, limit = 20) => {
   const accessToken = await getValidAccessToken(sessionId);
   
   try {
+    // Use Spotify's default search (same as their app)
+    // Spotify's algorithm intelligently parses track + artist combinations
     const response = await axios.get(`${SPOTIFY_API_BASE}/search`, {
       params: {
         q: query,
@@ -147,6 +149,38 @@ export const getUserPlaylists = async (sessionId) => {
   } catch (error) {
     console.error('Error fetching playlists:', error.response?.data || error.message);
     throw new Error('Failed to fetch playlists');
+  }
+};
+
+export const getPlaylistTracks = async (sessionId, playlistId, limit = 50) => {
+  const accessToken = await getValidAccessToken(sessionId);
+  
+  try {
+    const response = await axios.get(`${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks`, {
+      params: {
+        limit: limit,
+        fields: 'items(track(id,name,artists,album,duration_ms,uri,popularity))'
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    return response.data.items
+      .filter(item => item.track) // Filter out null tracks
+      .map(item => ({
+        spotifyTrackId: item.track.id,
+        title: item.track.name,
+        artist: item.track.artists.map(a => a.name).join(', '),
+        album: item.track.album.name,
+        duration: Math.floor(item.track.duration_ms / 1000),
+        albumArt: item.track.album.images[0]?.url || '',
+        uri: item.track.uri,
+        popularity: item.track.popularity || 0
+      }));
+  } catch (error) {
+    console.error('Error fetching playlist tracks:', error.response?.data || error.message);
+    throw new Error('Failed to fetch playlist tracks');
   }
 };
 

@@ -34,7 +34,7 @@ export const getQueue = async (req, res) => {
 export const addSong = async (req, res) => {
   try {
     const { sessionName } = req.params;
-    const { trackData } = req.body;
+    const { trackData, adminOverride } = req.body;
     const userId = req.userId;
     
     const session = await Session.findOne({ name: sessionName });
@@ -46,7 +46,7 @@ export const addSong = async (req, res) => {
       });
     }
     
-    const song = await queueService.addSongToQueue(session._id, userId, trackData);
+    const song = await queueService.addSongToQueue(session._id, userId, trackData, adminOverride);
     
     res.status(201).json({
       success: true,

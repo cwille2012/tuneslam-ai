@@ -97,4 +97,11 @@ router.delete('/:sessionName/blacklist/:trackId',
   sessionController.removeFromBlacklist
 );
 
+// Reset session - clear all songs and history (admin only)
+router.post('/:sessionName/reset',
+  authenticate,
+  requireAdmin,
+  sessionController.resetSession
+);
+
 export default router;

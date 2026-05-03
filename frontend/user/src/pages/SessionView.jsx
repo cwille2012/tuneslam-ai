@@ -75,6 +75,13 @@ function SessionView() {
       ));
     };
 
+    const handleSessionReset = () => {
+      console.log('🔄 Session has been reset by admin');
+      setQueue([]);
+      setCurrentlyPlaying(null);
+      alert('Session has been reset by the admin. The queue is now empty.');
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
@@ -84,6 +91,7 @@ function SessionView() {
     on('user-blocked', handleUserBlocked);
     on('user-unblocked', handleUserUnblocked);
     on('song-locked', handleSongLocked);
+    on('session-reset', handleSessionReset);
 
     return () => {
       off('queue-updated', handleQueueUpdated);
@@ -95,6 +103,7 @@ function SessionView() {
       off('user-blocked', handleUserBlocked);
       off('user-unblocked', handleUserUnblocked);
       off('song-locked', handleSongLocked);
+      off('session-reset', handleSessionReset);
     };
   }, [connected, on, off, user]);
 

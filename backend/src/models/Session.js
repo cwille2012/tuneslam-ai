@@ -64,6 +64,12 @@ const sessionSchema = new mongoose.Schema({
       type: Number,
       default: 420 // 7 minutes in seconds
     },
+    minSongPopularity: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
     songsPerHourLimit: {
       type: Number,
       default: null // null = unlimited
@@ -77,12 +83,16 @@ const sessionSchema = new mongoose.Schema({
     backupGenre: String,
     autoFillMode: {
       type: String,
-      enum: ['top-tracks', 'related-artists', 'genre-search', 'off'],
+      enum: ['top-tracks', 'related-artists', 'genre-search', 'custom-playlist', 'off'],
       default: 'genre-search'
     },
     autoFillMinimum: {
       type: Number,
       default: 3
+    },
+    customPlaylistId: {
+      type: String,
+      default: null
     }
   },
   blacklist: [{

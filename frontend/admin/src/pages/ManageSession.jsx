@@ -103,6 +103,20 @@ function ManageSession() {
     }
   };
 
+  const handleResetSession = async () => {
+    if (!confirm('⚠️ WARNING: This will clear ALL songs and history from this session.\n\nUser karma, blocklist, and blacklisted songs will NOT be affected.\n\nAre you sure you want to reset this session?')) {
+      return;
+    }
+    
+    try {
+      const response = await sessionAPI.reset(sessionName);
+      alert(response.data.message);
+      loadSessionData(); // Reload everything
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to reset session');
+    }
+  };
+
   const handleRemoveSong = async (songId) => {
     if (!confirm('Remove this song from the queue?')) return;
     
@@ -231,6 +245,9 @@ function ManageSession() {
             <Link to={`/session/${sessionName}/settings`} className="btn btn-secondary">
               ⚙️ Session Settings
             </Link>
+            <button onClick={handleResetSession} className="btn btn-danger">
+              🔄 Reset Session
+            </button>
           </div>
         </div>
 

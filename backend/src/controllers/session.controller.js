@@ -506,3 +506,40 @@ export const removeFromBlacklist = async (req, res) => {
     });
   }
 };
+
+export const resetSession = async (req, res) => {
+  try {
+    const { sessionName } = req.params;
+    
+    const session = await Session.findOne({ name: sessionName });
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+    
+    // Verify ownership
+    if (session.ownerId.toString() !== req.userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to reset this session'
+      });
+    }
+    
+    const { resetSessionQueue } = await import('../services/queue.service.js');
+    const result = await resetSessionQueue(session._id);
+    
+    res.json({
+      success: true,
+      message: `Session reset successfully. ${result.songsCleared} songs cleared.`,
+      songsCleared: result.songsCleared
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};

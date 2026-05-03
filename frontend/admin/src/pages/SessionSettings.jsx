@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { sessionAPI } from '../services/api';
+import { sessionAPI, spotifyAPI } from '../services/api';
 import Header from '../components/Header';
 
 function SessionSettings() {
@@ -9,11 +9,15 @@ function SessionSettings() {
   const [settings, setSettings] = useState({
     downvoteThreshold: 3,
     maxSongDuration: 420,
+    minSongPopularity: 0,
     songsPerHourLimit: null,
     allowReaddingRemovedSongs: false,
     autoFillMode: 'genre-search',
-    autoFillMinimum: 3
+    autoFillMinimum: 3,
+    customPlaylistId: null
   });
+  const [playlists, setPlaylists] = useState([]);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -26,7 +30,13 @@ function SessionSettings() {
   const loadSession = async () => {
     try {
       const response = await sessionAPI.get(sessionName);
-      setSettings(response.data.session.settings || settings);
+      const loadedSettings = response.data.session.settings || settings;
+      setSettings(loadedSettings);
+      
+      // Auto-load playlists if custom-playlist mode is already selected
+      if (loadedSettings.autoFillMode === 'custom-playlist') {
+        loadPlaylists();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load session');
     } finally {
@@ -34,8 +44,26 @@ function SessionSettings() {
     }
   };
 
+  const loadPlaylists = async () => {
+    setLoadingPlaylists(true);
+    try {
+      const response = await spotifyAPI.getPlaylists(sessionName);
+      setPlaylists(response.data.playlists || []);
+    } catch (err) {
+      setError('Failed to load playlists. Make sure Spotify is linked.');
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // If changing to custom-playlist mode, load playlists
+    if (name === 'autoFillMode' && value === 'custom-playlist') {
+      loadPlaylists();
+    }
+    
     setSettings(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : 
@@ -48,6 +76,13 @@ function SessionSettings() {
     e.preventDefault();
     setMessage('');
     setError('');
+    
+    // Validate custom playlist mode
+    if (settings.autoFillMode === 'custom-playlist' && !settings.customPlaylistId) {
+      setError('Please select a playlist for Custom Playlist mode');
+      return;
+    }
+    
     setSaving(true);
 
     try {
@@ -117,6 +152,38 @@ function SessionSettings() {
             </div>
 
             <div className="form-group">
+              <label>
+                Minimum Song Popularity (0-100)
+                <span className="info-tooltip">
+                  ℹ️
+                  <div className="info-tooltip-content">
+                    <strong>Spotify Popularity Scale (0-100):</strong>
+                    <ul>
+                      <li><strong>0-20:</strong> Very obscure/indie tracks</li>
+                      <li><strong>20-40:</strong> Lesser known songs</li>
+                      <li><strong>40-60:</strong> Moderately popular</li>
+                      <li><strong>60-80:</strong> Well-known hits</li>
+                      <li><strong>80-100:</strong> Chart-topping mainstream hits</li>
+                    </ul>
+                  </div>
+                </span>
+              </label>
+              <input
+                type="number"
+                name="minSongPopularity"
+                value={settings.minSongPopularity || 0}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                placeholder="0 (no minimum)"
+                disabled={saving}
+              />
+              <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                Only allow songs with this popularity or higher on Spotify's 0-100 scale (0 = no filter)
+              </small>
+            </div>
+
+            <div className="form-group">
               <label>Songs Per Hour Limit</label>
               <input
                 type="number"
@@ -158,12 +225,41 @@ function SessionSettings() {
                 <option value="genre-search">Genre Search (Recommended)</option>
                 <option value="top-tracks">Your Top Tracks</option>
                 <option value="related-artists">Related Artists</option>
+                <option value="custom-playlist">Custom Playlist</option>
                 <option value="off">Disabled</option>
               </select>
               <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
                 Strategy for automatically filling the queue with AI-recommended songs when it gets low
               </small>
             </div>
+
+            {settings.autoFillMode === 'custom-playlist' && (
+              <div className="form-group">
+                <label>Select Playlist</label>
+                {loadingPlaylists ? (
+                  <div style={{ padding: '12px', textAlign: 'center' }}>
+                    <div className="spinner"></div>
+                  </div>
+                ) : (
+                  <select
+                    name="customPlaylistId"
+                    value={settings.customPlaylistId || ''}
+                    onChange={handleChange}
+                    disabled={saving}
+                  >
+                    <option value="">-- Select a Playlist --</option>
+                    {playlists.map(playlist => (
+                      <option key={playlist.id} value={playlist.id}>
+                        {playlist.name} ({playlist.trackCount} tracks)
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                  Songs will be automatically added from this playlist when the queue is low
+                </small>
+              </div>
+            )}
 
             <div className="form-group">
               <label>Auto-Fill Minimum Queue Size</label>
