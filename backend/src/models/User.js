@@ -49,10 +49,15 @@ const userSchema = new mongoose.Schema({
   // OAuth Fields
   authProvider: {
     type: String,
-    enum: ['local', 'facebook'],
+    enum: ['local', 'facebook', 'spotify'],
     default: 'local'
   },
   facebookId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  spotifyId: {
     type: String,
     unique: true,
     sparse: true

@@ -98,10 +98,35 @@ function Login() {
               window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/facebook?${stateParam}`;
             }}
             disabled={loading}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}
           >
             <span style={{ fontSize: '20px' }}>📘</span>
             Continue with Facebook
+          </button>
+
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              // Pass redirect URL in state parameter
+              const redirectTo = getRedirectUrl();
+              const stateParam = redirectTo !== '/profile' ? `&state=${encodeURIComponent(redirectTo)}` : '';
+              window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/spotify?${stateParam}`;
+            }}
+            disabled={loading}
+            style={{ 
+              width: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '8px',
+              background: '#1DB954',
+              color: 'white',
+              border: 'none'
+            }}
+          >
+            <span style={{ fontSize: '20px' }}>🎵</span>
+            Continue with Spotify
           </button>
         </form>
 

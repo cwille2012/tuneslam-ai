@@ -98,4 +98,23 @@ router.get('/facebook/callback',
   authController.facebookCallback
 );
 
+// OAuth Routes - Spotify (User Login + Library)
+router.get('/spotify', (req, res, next) => {
+  // Preserve state parameter (contains redirect URL)
+  const state = req.query.state;
+  
+  passport.authenticate('spotify-user', { 
+    session: false,
+    state: state // Pass through state
+  })(req, res, next);
+});
+
+router.get('/spotify/callback',
+  passport.authenticate('spotify-user', { 
+    session: false,
+    failureRedirect: `${process.env.USER_URL}/login?error=Spotify authentication failed`
+  }),
+  authController.spotifyCallback
+);
+
 export default router;

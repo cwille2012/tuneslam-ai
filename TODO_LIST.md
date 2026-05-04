@@ -7,7 +7,6 @@ Is the votes db in mongo scalable?
 Make services and connect to tuneslam.com
 Should down votes be a thing?
 User logs in with spotify and automatically connects spotify?
-Add Instagram login
 Add display name? Or use firstname last initial?
 Genre/artist search needs more seed tracks?
 Admin dashboard should show currently playing
@@ -21,6 +20,7 @@ Scroll in Spotify browse for user and admin
 FINISHED NEEDS TESTING:
 User should be able to search by artist as well
 Test song filling on empty playlist in all modes
+Spotify linking account login with spotify
 Order of songs is still not perfect (fix added but needs a lot of testing)
 Admin can add blacklisted/too long song to queue
 Check karma stats are properly being added to database

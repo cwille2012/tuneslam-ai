@@ -119,6 +119,169 @@ Change user password.
 }
 ```
 
+### OAuth Login - Facebook
+**GET** `/auth/facebook?state=<redirect_url>`
+
+Initiates Facebook OAuth login flow. Users are redirected to Facebook for authentication.
+
+**Query Parameters:**
+- `state` (optional): URL to redirect to after successful login
+
+**Behavior:**
+- Creates new user account if first time
+- Links to existing account with matching email (non-admin only)
+- Auto-populates profile with Facebook data
+
+**Response:**
+Redirects to `<USER_URL>/oauth-callback?token=<jwt>&redirect=<state>`
+
+### OAuth Callback - Facebook
+**GET** `/auth/facebook/callback`
+
+Handles Facebook OAuth callback (automatic redirect from Facebook).
+
+### OAuth Login - Spotify
+**GET** `/auth/spotify?state=<redirect_url>`
+
+Initiates Spotify OAuth login flow with automatic library linking. Users are redirected to Spotify for authentication.
+
+**Query Parameters:**
+- `state` (optional): URL to redirect to after successful login
+
+**Scopes Requested:**
+- `user-read-email` - Read user email
+- `playlist-read-private` - Access private playlists
+- `playlist-read-collaborative` - Access collaborative playlists  
+- `user-library-read` - Access liked songs
+
+**Behavior:**
+- Creates new user account if first time
+- Links to existing **non-admin** account with matching email
+- **Blocks** linking to admin accounts (security feature)
+- Automatically links Spotify library for browsing
+- Stores access/refresh tokens for library access
+
+**Response:**
+Redirects to `<USER_URL>/oauth-callback?token=<jwt>&redirect=<state>`
+
+### OAuth Callback - Spotify
+**GET** `/auth/spotify/callback`
+
+Handles Spotify OAuth callback (automatic redirect from Spotify).
+
+---
+
+## User Spotify Library Endpoints
+
+### Link Spotify Library
+**POST** `/user/spotify/link`
+
+Manually link user's personal Spotify account for library browsing.
+
+**Response:**
+```json
+{
+  "success": true,
+  "authUrl": "https://accounts.spotify.com/authorize?..."
+}
+```
+
+User must visit the `authUrl` to authorize.
+
+### Check Library Link Status
+**GET** `/user/spotify/check`
+
+Check if user has linked their Spotify library.
+
+**Response:**
+```json
+{
+  "success": true,
+  "linked": true,
+  "linkedAt": "2024-01-01T00:00:00.000Z",
+  "spotifyUserId": "user123"
+}
+```
+
+### Get User Playlists
+**GET** `/user/spotify/playlists`
+
+Get user's personal Spotify playlists (requires linked library).
+
+**Response:**
+```json
+{
+  "success": true,
+  "playlists": [
+    {
+      "id": "playlist_id",
+      "name": "My Playlist",
+      "image": "https://...",
+      "trackCount": 42
+    }
+  ]
+}
+```
+
+### Get Playlist Tracks
+**GET** `/user/spotify/playlists/:playlistId/tracks`
+
+Get tracks from a specific user playlist.
+
+**Response:**
+```json
+{
+  "success": true,
+  "tracks": [
+    {
+      "id": "track_id",
+      "name": "Song Name",
+      "artist": "Artist Name",
+      "album": "Album Name",
+      "duration": 240000,
+      "image": "https://...",
+      "uri": "spotify:track:..."
+    }
+  ]
+}
+```
+
+### Get Liked Songs
+**GET** `/user/spotify/liked-songs`
+
+Get user's liked songs from Spotify (requires linked library).
+
+**Response:**
+```json
+{
+  "success": true,
+  "tracks": [
+    {
+      "id": "track_id",
+      "name": "Song Name",
+      "artist": "Artist Name",
+      "album": "Album Name",
+      "duration": 240000,
+      "image": "https://...",
+      "uri": "spotify:track:..."
+    }
+  ]
+}
+```
+
+### Unlink Spotify Library
+**DELETE** `/user/spotify/unlink`
+
+Unlink user's personal Spotify library.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Spotify account unlinked successfully"
+}
+```
+
 ---
 
 ## Session Endpoints

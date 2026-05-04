@@ -20,6 +20,11 @@
 - [x] Password change functionality
 - [x] User statistics tracking
 - [x] Karma points system
+- [x] **Facebook OAuth login**
+- [x] **Spotify OAuth login with auto-library linking**
+- [x] **OAuth account linking (merge accounts by email)**
+- [x] **Admin account protection from user OAuth flows**
+- [x] **Multiple auth providers per account**
 
 ### Session Management
 - [x] Create URL-friendly sessions
@@ -88,12 +93,20 @@
 ### User Interface Features
 - [x] User registration (basic info only)
 - [x] Login/logout
+- [x] **Facebook login button**
+- [x] **Spotify login button**
+- [x] **OAuth callback handling**
 - [x] Join sessions via URL
 - [x] View live queue
 - [x] Search for songs (Spotify API)
 - [x] Add songs to queue
 - [x] Vote on songs (upvote/downvote)
 - [x] Change or remove votes
+- [x] **Link personal Spotify library**
+- [x] **Browse personal playlists in search modal**
+- [x] **Browse liked songs in search modal**
+- [x] **View library link status**
+- [x] **Unlink Spotify library**
 - [x] Profile settings page
 - [x] View karma and statistics
 - [x] Spotify-styled dark theme
