@@ -2,7 +2,6 @@ TODO:
 Authentication required for viewer
 Authentication for queue endpoints
 Authentication for databases
-Combine 3 front ends
 Is the votes db in mongo scalable?
 Make services and connect to tuneslam.com
 Should down votes be a thing?
