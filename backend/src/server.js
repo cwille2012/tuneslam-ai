@@ -1,14 +1,17 @@
 // Load environment variables FIRST before any other imports
-import dotenv from 'dotenv';
+import dotenv from 'dotenv-flow';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname } from 'path';
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables from explicit path BEFORE importing anything else
-dotenv.config({ path: join(__dirname, '../.env') });
+// Load environment variables - dotenv-flow automatically loads the right file
+// .env.development when NODE_ENV=development
+// .env.production when NODE_ENV=production
+// .env as fallback
+dotenv.config({ path: __dirname + '/..' });
 
 // Log Spotify config to verify it loaded (remove in production)
 console.log('🔍 Spotify Config Check:', {
