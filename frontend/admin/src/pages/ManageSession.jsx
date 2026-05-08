@@ -49,14 +49,30 @@ function ManageSession() {
       loadQueue();
     };
 
+    const handlePlayerConnected = (data) => {
+      console.log('🎵 player-connected received', data);
+      // Update local session state so the playback controls panel appears
+      // without requiring a page refresh.
+      setSession(prev => prev ? { ...prev, playerConnected: true } : prev);
+    };
+
+    const handlePlayerDisconnected = (data) => {
+      console.log('🎵 player-disconnected received', data);
+      setSession(prev => prev ? { ...prev, playerConnected: false } : prev);
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
+    on('player-connected', handlePlayerConnected);
+    on('player-disconnected', handlePlayerDisconnected);
 
     return () => {
       off('queue-updated', handleQueueUpdated);
       off('song-added', handleSongAdded);
       off('song-removed', handleSongRemoved);
+      off('player-connected', handlePlayerConnected);
+      off('player-disconnected', handlePlayerDisconnected);
     };
   }, [connected, on, off]);
 
@@ -170,11 +186,28 @@ function ManageSession() {
   };
 
   const openTVViewer = () => {
-    // Use current hostname but with viewer port (5175)
-    const currentHost = window.location.hostname;
-    const viewerPort = import.meta.env.VITE_VIEWER_PORT || '5175';
-    const viewerUrl = `http://${currentHost}:${viewerPort}`;
+    const viewerUrl = import.meta.env.VITE_VIEWER_URL;
     window.open(`${viewerUrl}/viewer/${sessionName}`, '_blank');
+  };
+
+  const openPlayer = () => {
+    const token = localStorage.getItem('tuneslam_admin_token');
+    const playerUrl = `${import.meta.env.VITE_PLAYER_URL}/session/${sessionName}?token=${token}`;
+    window.open(playerUrl, 'TuneSlam Player', 'width=1200,height=800');
+  };
+
+  const handlePlaybackControl = async (action) => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/sessions/${sessionName}/playback/${action}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('tuneslam_admin_token')}`
+        }
+      });
+    } catch (error) {
+      console.error(`Failed to ${action}:`, error);
+      alert(`Failed to ${action} playback`);
+    }
   };
 
   if (loading) {
@@ -227,12 +260,82 @@ function ManageSession() {
 
         <div className="card">
           <h2 style={{ marginBottom: '16px' }}>Quick Actions</h2>
+          {session?.playerConnected && (
+            <div style={{ 
+              padding: '12px 16px', 
+              background: 'linear-gradient(135deg, #1DB954 0%, #1ed760 100%)',
+              color: 'white',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '20px' }}>🎵</span>
+                  <strong>Web Player Active</strong>
+                </div>
+                <div style={{ fontSize: '14px', opacity: 0.9 }}>
+                  Browser player is connected and ready
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={() => handlePlaybackControl('play')} 
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: 'none',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  ▶️ Play
+                </button>
+                <button 
+                  onClick={() => handlePlaybackControl('pause')}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: 'none',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  ⏸️ Pause
+                </button>
+                <button 
+                  onClick={() => handlePlaybackControl('skip')}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: 'none',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  ⏭️ Skip
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             {!session?.spotifyAccessToken && (
               <button onClick={handleLinkSpotify} className="btn btn-primary">
                 🎵 Link Spotify
               </button>
             )}
+            <button onClick={openPlayer} className="btn btn-primary">
+              🎵 Open Web Player
+            </button>
             <button onClick={openTVViewer} className="btn btn-secondary">
               📺 Open TV Display
             </button>

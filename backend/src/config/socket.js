@@ -9,7 +9,8 @@ export const initializeSocket = (httpServer) => {
   const allowedOrigins = [
     ...(process.env.ADMIN_URL?.split(',') || []),
     ...(process.env.USER_URL?.split(',') || []),
-    ...(process.env.VIEWER_URL?.split(',') || [])
+    ...(process.env.VIEWER_URL?.split(',') || []),
+    ...(process.env.PLAYER_URL?.split(',') || [])
   ].filter(Boolean);
 
   io = new Server(httpServer, {
@@ -133,6 +134,85 @@ export const initializeSocket = (httpServer) => {
       }
     });
 
+    // Player events
+    socket.on('player-connected', async (data) => {
+      if (socket.currentSession) {
+        console.log(`🎵 Player connected for session: ${socket.currentSession}`);
+        // Remember this socket as THE player socket for this session, so that
+        // if the browser tab is closed (without a graceful unmount/HTTP
+        // unregister) we can still clear the session's player state from the
+        // `disconnect` handler below.
+        socket.isPlayer = true;
+        socket.playerSessionName = socket.currentSession;
+        socket.playerDeviceId = data?.deviceId || null;
+
+        io.to(`session:${socket.currentSession}`).emit('player-connected', {
+          playerActive: true,
+          deviceId: data.deviceId,
+          timestamp: new Date()
+        });
+      }
+    });
+
+    socket.on('player-disconnected', async () => {
+      if (socket.currentSession) {
+        console.log(`🎵 Player disconnected from session: ${socket.currentSession}`);
+        socket.isPlayer = false;
+
+        // Clear server-side player state so the admin UI reflects reality
+        try {
+          const Session = (await import('../models/Session.js')).default;
+          const session = await Session.findOne({ name: socket.currentSession });
+          if (session && session.playerConnected) {
+            session.playerConnected = false;
+            session.activePlayerId = null;
+            session.playerDeviceId = null;
+            session.playerPaused = false;
+            await session.save();
+          }
+        } catch (err) {
+          console.error('Error clearing player state on player-disconnected:', err);
+        }
+
+        io.to(`session:${socket.currentSession}`).emit('player-disconnected', {
+          playerActive: false,
+          timestamp: new Date()
+        });
+      }
+    });
+
+    socket.on('playback-state-changed', (data) => {
+      if (socket.currentSession) {
+        io.to(`session:${socket.currentSession}`).emit('playback-state-changed', {
+          isPaused: data.isPaused,
+          position: data.position,
+          track: data.track,
+          timestamp: new Date()
+        });
+        
+        if (data.isPaused) {
+          io.to(`session:${socket.currentSession}`).emit('player-paused', {
+            paused: true,
+            timestamp: new Date()
+          });
+        }
+      }
+    });
+
+    socket.on('player-skip-requested', () => {
+      if (socket.currentSession) {
+        console.log(`⏭️ Skip requested from player`);
+        io.to(`session:${socket.currentSession}`).emit('skip-to-next');
+      }
+    });
+
+    socket.on('player-song-ended', () => {
+      if (socket.currentSession) {
+        console.log(`✅ Song ended in player`);
+        io.to(`session:${socket.currentSession}`).emit('song-ended-auto-advance');
+      }
+    });
+
     // Leave session room
     socket.on('leave-session', (sessionName) => {
       socket.leave(`session:${sessionName}`);
@@ -150,9 +230,34 @@ export const initializeSocket = (httpServer) => {
       console.log(`User ${socket.userId} left session: ${sessionName}`);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`User disconnected: ${socket.userId} (isAdmin: ${socket.isAdmin})`);
-      
+
+      // If this socket was the active player (e.g. admin closed the player
+      // tab/window without a graceful React unmount), clear the session's
+      // player state and notify everyone so the admin UI hides its controls.
+      if (socket.isPlayer && socket.playerSessionName) {
+        const sessionName = socket.playerSessionName;
+        console.log(`🎵 Player socket disconnected for session: ${sessionName}`);
+        try {
+          const Session = (await import('../models/Session.js')).default;
+          const session = await Session.findOne({ name: sessionName });
+          if (session && session.playerConnected) {
+            session.playerConnected = false;
+            session.activePlayerId = null;
+            session.playerDeviceId = null;
+            session.playerPaused = false;
+            await session.save();
+          }
+        } catch (err) {
+          console.error('Error clearing player state on disconnect:', err);
+        }
+        io.to(`session:${sessionName}`).emit('player-disconnected', {
+          playerActive: false,
+          timestamp: new Date()
+        });
+      }
+
       // Remove from all connected sessions (all authenticated users, not anonymous viewers)
       if (socket.userId && !socket.isViewer && socket.currentSession) {
         const sessionName = socket.currentSession;

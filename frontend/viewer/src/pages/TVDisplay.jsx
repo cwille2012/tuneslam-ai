@@ -11,6 +11,7 @@ function TVDisplay() {
   const [queue, setQueue] = useState([]);
   const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [playerPaused, setPlayerPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -80,6 +81,11 @@ function TVDisplay() {
       setProgress(null);
     };
 
+    const handlePlayerPaused = (data) => {
+      console.log('⏸️ player-paused received:', data);
+      setPlayerPaused(data.paused);
+    };
+
     on('queue-updated', handleQueueUpdated);
     on('song-added', handleSongAdded);
     on('song-removed', handleSongRemoved);
@@ -88,6 +94,7 @@ function TVDisplay() {
     on('playback-progress', handlePlaybackProgress);
     on('song-locked', handleSongLocked);
     on('session-reset', handleSessionReset);
+    on('player-paused', handlePlayerPaused);
 
     console.log('✅ All socket handlers registered');
 
@@ -100,6 +107,7 @@ function TVDisplay() {
       off('playback-progress', handlePlaybackProgress);
       off('song-locked', handleSongLocked);
       off('session-reset', handleSessionReset);
+      off('player-paused', handlePlayerPaused);
     };
   }, [connected, on, off]);
 
@@ -211,7 +219,7 @@ function TVDisplay() {
       </div>
 
       <div className="tv-main">
-        <NowPlaying song={currentlyPlaying} progress={progress} />
+        <NowPlaying song={currentlyPlaying} progress={progress} isPaused={playerPaused} />
         <QueueList queue={queue} />
       </div>
     </div>

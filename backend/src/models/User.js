@@ -81,6 +81,16 @@ const userSchema = new mongoose.Schema({
   spotifyTokenExpires: {
     type: Date
   },
+  // Spotify Premium/Business status
+  spotifyPremium: {
+    type: Boolean,
+    default: false
+  },
+  spotifyAccountType: {
+    type: String,
+    enum: ['free', 'premium', 'business'],
+    default: 'free'
+  },
   isAdmin: {
     type: Boolean,
     default: false

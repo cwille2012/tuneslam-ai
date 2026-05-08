@@ -114,6 +114,23 @@ const sessionSchema = new mongoose.Schema({
       ref: 'Song'
     }
   },
+  // Web Player tracking
+  activePlayerId: {
+    type: String,
+    default: null
+  },
+  playerConnected: {
+    type: Boolean,
+    default: false
+  },
+  playerDeviceId: {
+    type: String,
+    default: null
+  },
+  playerPaused: {
+    type: Boolean,
+    default: false
+  },
   participants: [participantSchema],
   blockedUsers: [{
     type: mongoose.Schema.Types.ObjectId,

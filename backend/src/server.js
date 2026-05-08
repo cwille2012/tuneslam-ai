@@ -49,6 +49,7 @@ import userRoutes from './routes/user.routes.js';
 import spotifyRoutes from './routes/spotify.routes.js';
 import userSpotifyRoutes from './routes/user-spotify.routes.js';
 import adminSpotifyRoutes from './routes/admin-spotify.routes.js';
+import playerRoutes from './routes/player.routes.js';
 
 // Import services
 import { startPlaybackMonitoring } from './services/playback.service.js';
@@ -66,7 +67,8 @@ app.use(helmet());
 const allowedOrigins = [
   ...(process.env.ADMIN_URL?.split(',') || []),
   ...(process.env.USER_URL?.split(',') || []),
-  ...(process.env.VIEWER_URL?.split(',') || [])
+  ...(process.env.VIEWER_URL?.split(',') || []),
+  ...(process.env.PLAYER_URL?.split(',') || [])
 ].filter(Boolean);
 
 app.use(cors({
@@ -89,6 +91,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/sessions', queueRoutes);
+app.use('/api/sessions', playerRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/user/spotify', userSpotifyRoutes);

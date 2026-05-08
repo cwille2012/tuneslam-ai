@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-function NowPlaying({ song, progress }) {
+function NowPlaying({ song, progress, isPaused }) {
   const [localProgress, setLocalProgress] = useState(0);
   const lastUpdateRef = useRef(null);
 
@@ -61,6 +61,25 @@ function NowPlaying({ song, progress }) {
 
   return (
     <div className="tv-now-playing">
+      {isPaused && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(0, 0, 0, 0.8)',
+          color: '#ffc107',
+          padding: '20px 40px',
+          borderRadius: '12px',
+          fontSize: '32px',
+          fontWeight: '700',
+          zIndex: 10,
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+        }}>
+          ⏸️ Music Paused
+        </div>
+      )}
+      
       <img
         src={song.albumArtUrl}
         alt={song.title}

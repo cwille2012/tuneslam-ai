@@ -1,5 +1,7 @@
 import * as spotifyService from '../services/spotify.service.js';
 import Session from '../models/Session.js';
+import User from '../models/User.js';
+import axios from 'axios';
 
 export const getAuthUrl = async (req, res) => {
   try {
@@ -53,6 +55,29 @@ export const callback = async (req, res) => {
     session.spotifyAccessToken = tokens.accessToken;
     session.spotifyRefreshToken = tokens.refreshToken;
     session.spotifyTokenExpiry = new Date(Date.now() + tokens.expiresIn * 1000);
+    
+    // Check Premium status
+    try {
+      const profileResponse = await axios.get('https://api.spotify.com/v1/me', {
+        headers: { 'Authorization': `Bearer ${tokens.accessToken}` }
+      });
+      
+      const profile = profileResponse.data;
+      
+      // Update user with Premium status
+      const user = await User.findById(session.ownerId);
+      if (user) {
+        // Consider any non-free account as premium (includes premium, premium-family, business, etc.)
+        user.spotifyPremium = profile.product && profile.product !== 'free';
+        user.spotifyAccountType = profile.product || 'free';
+        await user.save();
+        
+        console.log(`✅ Spotify account type: ${profile.product} (Premium: ${user.spotifyPremium})`);
+      }
+    } catch (profileError) {
+      console.error('Failed to fetch Spotify profile:', profileError);
+      // Continue anyway - this is not critical for basic functionality
+    }
     
     // IMPORTANT: Save tokens to database BEFORE creating playlist
     // because createOrGetTuneslamPlaylist needs to read tokens from DB

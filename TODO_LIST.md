@@ -10,11 +10,17 @@ Add display name? Or use firstname last initial?
 Genre/artist search needs more seed tracks?
 Admin dashboard should show currently playing
 Change from passwords to text code verification
+Link spotify to admin account not session
+Only open player if there is a song in the queue?
+500 code when opening My Library from admin add song
+Crossfade workaround for player
+If song is more than half over and player closes, start next song on player open
 
 BUGS:
 Recommended songs added have 0 popularity
 My library on user spotify only shows 50 songs even more can be loaded
 Scroll in Spotify browse for user and admin
+User linking spotift callback works but gets stuck
 
 FINISHED NEEDS TESTING:
 User should be able to search by artist as well

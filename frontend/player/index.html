@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TuneSlam Player</title>
+    <!--
+      Pre-declare the Spotify SDK ready callback BEFORE the SDK script loads.
+      The SDK invokes window.onSpotifyWebPlaybackSDKReady() as soon as it
+      finishes loading; if React hasn't mounted yet, that call would throw
+      "onSpotifyWebPlaybackSDKReady is not defined". We queue it here and
+      replay once our hook assigns the real handler.
+    -->
+    <script>
+      (function () {
+        window.__spotifySDKReady = false;
+        window.onSpotifyWebPlaybackSDKReady = function () {
+          window.__spotifySDKReady = true;
+        };
+      })();
+    </script>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
