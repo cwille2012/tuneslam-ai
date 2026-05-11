@@ -1,320 +1,114 @@
-# 🎵 TuneSlam - Collaborative Music Queue System
+# TuneSlam AI
 
-A real-time collaborative music queue application for parties and bars, built with Node.js, React, and Spotify API.
+Collaborative, real-time, community-driven Spotify queues for venues, parties
+and any space that wants the crowd to control the music.
 
-## 🚀 Features
+This monorepo contains:
 
-### For Admins
-- Create and manage sessions with URL-friendly names
-- Link Spotify account for seamless playlist integration
-- Real-time queue monitoring and control
-- User management (block/unblock participants)
-- Configurable settings (downvote threshold, song duration limits, rate limiting)
-- TV display for public viewing with QR codes
-- Add/remove songs manually from queue via admin dashboard
-- Session enable/disable toggle
+| Workspace                | Path                  | Description                                              |
+| ------------------------ | --------------------- | -------------------------------------------------------- |
+| `@tuneslam/shared`       | `shared/`             | Shared TypeScript types, slug helpers and constants.     |
+| `backend`                | `backend/`            | Express + Mongoose + Socket.IO API + queue + autofill.   |
+| `@tuneslam/admin`        | `frontends/admin/`    | Venue / admin dashboard (sessions, settings, history).   |
+| `@tuneslam/user`         | `frontends/user/`     | Patron app (join `/<slug>`, search, add, vote).          |
+| `@tuneslam/player`       | `frontends/player/`   | Spotify Web Playback player + crowd-facing now-playing.  |
 
-### For Users
-- Scan QR code or visit URL to join sessions
-- Search and add songs using Spotify
-- Vote on songs (upvote/downvote)
-- Earn karma points for popular song choices
-- View personal statistics
-- Mobile-optimized Spotify-styled interface
-- Real-time queue updates
-- Profile management
+## Local development (binds to `192.168.0.4`)
 
-### TV Display
-- Fullscreen dark mode interface
-- Now playing with album art and progress bar
-- Live queue with vote counts
-- QR code and session URL display
-- Auto-scrolling for long queues
-- Optimized for viewing from a distance
+The dev environment is configured for an LAN IP of `192.168.0.4` so devices
+on the same Wi-Fi (phones, tablets, smart-displays) can hit the backend and
+all three frontends.
 
-## 🏗️ Architecture
+### Prereqs
 
-### Backend (Port 5000)
-- **Node.js + Express** - RESTful API server
-- **MongoDB** - User, session, song, and vote data
-- **Redis** - Caching, rate limiting, vote tracking
-- **Socket.io** - Real-time updates across all clients
-- **Spotify Web API** - Music search and playlist management
-- **bcrypt** - Secure password hashing
-- **JWT** - Token-based authentication
+* Node.js 20+
+* MongoDB running locally (`mongodb://127.0.0.1:27017`)
+* A Spotify Developer app
+* A Facebook Developer app (optional — only required for FB login)
 
-### Frontend - Three Separate Apps
-1. **Admin Dashboard (Port 5173)** - React + Vite for session management
-2. **User Interface (Port 5174)** - React + Vite with Spotify styling
-3. **TV Viewer (Port 5175)** - React + Vite with dark mode
+The Spotify app must whitelist `http://192.168.0.4:4000/api/auth/spotify/callback`.
+The Facebook app must whitelist `http://192.168.0.4:4000/api/auth/facebook/callback`.
 
-## 📦 Tech Stack
+### One-time setup
 
-- **Backend**: Node.js, Express, MongoDB, Redis, Socket.io
-- **Frontend**: React 18, Vite, React Router v6
-- **APIs**: Spotify Web API
-- **Authentication**: JWT, bcrypt
-- **Real-time**: Socket.io
-- **QR Codes**: qrcode package
-- **Validation**: express-validator
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js v18+
-- MongoDB (running)
-- Redis (running)
-- Spotify Developer Account
-
-### Installation
-
-1. **Clone and install dependencies:**
-```bash
+```sh
 npm install
-cd backend && npm install
-cd ../frontend/admin && npm install
-cd ../frontend/user && npm install
-cd ../frontend/viewer && npm install
+cp backend/.env.development backend/.env   # optional, for local secret overrides
+# edit backend/.env (or backend/.env.development) and fill in:
+#   SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+#   FACEBOOK_APP_ID, FACEBOOK_APP_SECRET (optional)
 ```
 
-2. **Setup environment:**
-```bash
-cd backend
-cp .env.example .env
-# Edit .env with your MongoDB, Redis, and Spotify credentials
+### Run everything
+
+```sh
+npm run dev
 ```
 
-3. **Start all services:**
+This starts:
 
-**Option A - Use startup script (Linux with gnome-terminal):**
-```bash
-./start-all.sh
+* **Backend**  — http://192.168.0.4:4000
+* **Admin**    — http://192.168.0.4:5173
+* **User**     — http://192.168.0.4:5174
+* **Player**   — http://192.168.0.4:5175
+
+Open the admin app in a browser, register an admin, link Spotify, create a
+session, then visit the **user** app at `/your-slug` from a phone on the
+same Wi-Fi.
+
+> If `192.168.0.4` is not your machine's LAN IP, change every occurrence in
+> the env files (`backend/.env.development` and `frontends/*/.env.development`)
+> as well as `vite.config.ts` ports if you need to.
+
+## Production deployment
+
+* **Backend** → AWS Elastic Beanstalk (Docker platform). See
+  [`deploy/beanstalk/`](./deploy/beanstalk/).
+* **Frontends** → Cloudflare Pages (one project per frontend). See
+  [`deploy/cloudflare/README.md`](./deploy/cloudflare/README.md).
+
+### Build everything locally
+
+```sh
+npm run build
 ```
 
-**Option B - Start manually in 4 terminals:**
-```bash
-# Terminal 1: Backend
-cd backend && npm run dev
+### Deploy backend to Beanstalk
 
-# Terminal 2: Admin Dashboard
-cd frontend/admin && npm run dev
-
-# Terminal 3: User Interface
-cd frontend/user && npm run dev
-
-# Terminal 4: TV Viewer
-cd frontend/viewer && npm run dev
+```sh
+# from repo root, with the Dockerfile in deploy/beanstalk/Dockerfile.
+# AWS EB CLI must be installed and configured.
+eb init                       # one-time
+cp deploy/beanstalk/Dockerfile .            # EB CLI uploads from cwd
+cp deploy/beanstalk/Dockerrun.aws.json .
+cp -r deploy/beanstalk/.ebextensions .
+eb deploy
 ```
 
-### Access the Apps
+Set every required environment variable on the EB environment
+(`MONGO_URI`, `JWT_SECRET`, `TOKEN_ENC_KEY`, `SPOTIFY_*`, etc).
 
-- **Admin Dashboard**: http://localhost:5173
-- **User Interface**: http://localhost:5174/session/{sessionName}
-- **TV Viewer**: http://localhost:5175/viewer/{sessionName}
-- **API**: http://localhost:5000/api
+### Deploy frontends to Cloudflare Pages
 
-## 📖 Documentation
+For each frontend, create a Cloudflare Pages project, set the build command
+and output directory listed in `deploy/cloudflare/README.md`, set the
+`VITE_*` environment variables for production, and bind a custom domain.
 
-- **[SETUP_INSTRUCTIONS.md](./SETUP_INSTRUCTIONS.md)** - Detailed setup guide
-- **[COMPLETE_GUIDE.md](./COMPLETE_GUIDE.md)** - Complete implementation guide
-- **[backend/API_DOCUMENTATION.md](./backend/API_DOCUMENTATION.md)** - API reference
-- **[FRONTEND_STATUS.md](./FRONTEND_STATUS.md)** - Frontend development notes
+## Architecture notes
 
-## 🎯 Usage Flow
-
-### For Bar/Venue Owners:
-
-1. Register admin account with business details
-2. Create a new session (e.g., "tacotuesday")
-3. Link your Spotify account
-4. Open TV viewer on a display screen
-5. Share session URL or QR code with guests
-6. Manage queue, block users, adjust settings
-7. Toggle session off when event ends
-
-### For Attendees:
-
-1. Scan QR code or visit session URL
-2. Create account (username, email, phone, password)
-3. Browse the current queue
-4. Search for songs and add them
-5. Vote on your favorite songs
-6. Earn karma points when your songs get upvoted
-7. Track your statistics
-
-## 🌟 Key Features Implemented
-
-### ✅ Authentication & Authorization
-- Separate admin (with address) and user registration
-- JWT-based secure authentication
-- Password hashing with bcrypt
-- Profile management (username, email, phone, address for admins)
-- Password change functionality
-
-### ✅ Session Management
-- URL-friendly session names
-- One active session per admin
-- Enable/disable sessions
-- QR code generation
-- Spotify OAuth integration
-- Real-time participant tracking
-
-### ✅ Queue System
-- Add songs via Spotify search
-- Voting (upvote/downvote)
-- Auto-remove songs at downvote threshold (configurable)
-- Prevent duplicate songs
-- Song duration limits (configurable)
-- Admin can remove any song
-- Real-time queue synchronization
-
-### ✅ User Management
-- Track all participants per session
-- Block/unblock users
-- View user statistics
-- Karma points system
-- Rate limiting per user
-
-### ✅ Real-time Updates
-- Socket.io for instant updates
-- Queue changes broadcast to all clients
-- Vote counts update live
-- Session status changes
-- User blocking notifications
-
-### ✅ TV Display
-- Dark mode optimized for TVs
-- Split view: now playing + queue
-- Large, readable text
-- QR code and URL display
-- Auto-scrolling queue
-- Real-time synchronization
-
-## 🔒 Security Features
-
-- Passwords hashed with bcrypt (10 rounds)
-- JWT tokens with expiration
-- Environment variables for sensitive data
-- Input validation on all endpoints
-- Rate limiting to prevent abuse
-- CORS configured for specific origins
-- SQL injection prevention (using Mongoose)
-- XSS protection
-
-## 📱 Responsive Design
-
-- **Admin Dashboard**: Desktop & mobile responsive
-- **User Interface**: Mobile-first, optimized for phones
-- **TV Viewer**: Fullscreen for large displays
-
-## 🎨 Design Philosophy
-
-- **Admin**: Clean, functional, easy to use
-- **User**: Match Spotify mobile app aesthetics
-- **Viewer**: Dark mode, large text, high contrast
-
-## 🔄 Real-time Features
-
-All changes are instantly reflected across all connected clients:
-- Queue updates
-- Vote changes
-- Song additions/removals
-- Session status changes
-- User blocks/unblocks
-
-## 📊 User Statistics
-
-Track for each user:
-- Karma points (upvotes - downvotes on their songs)
-- Songs added count
-- Songs played count
-- Upvotes received
-- Downvotes received
-
-## 🛠️ Development
-
-### Project Structure
-```
-tuneslam-ai/
-├── backend/                 # Node.js + Express API
-│   ├── src/
-│   │   ├── config/         # Database, Redis, Socket, Spotify config
-│   │   ├── models/         # MongoDB schemas
-│   │   ├── services/       # Business logic
-│   │   ├── controllers/    # Route handlers
-│   │   ├── routes/         # API routes
-│   │   ├── middleware/     # Auth, validation, rate limiting
-│   │   └── utils/          # Helper functions
-│   └── package.json
-├── frontend/
-│   ├── admin/              # Admin dashboard (React + Vite)
-│   ├── user/               # User interface (React + Vite)
-│   └── viewer/             # TV display (React + Vite)
-└── start-all.sh            # Startup script
-```
-
-### Backend Modules
-- **Models**: User, Session, Song, Vote
-- **Services**: Auth, Spotify, Queue, Voting
-- **Controllers**: Auth, Session, Queue, User, Spotify
-- **Middleware**: Authentication, Validation, Rate Limiting
-
-### Frontend Components
-Each frontend app is modular with:
-- **Pages**: Route-level components
-- **Components**: Reusable UI elements
-- **Context**: Global state management
-- **Hooks**: Custom hooks (useSocket, useAuth)
-- **Services**: API integration layer
-
-## 🔑 Environment Variables
-
-See `backend/.env.example` for all required environment variables:
-- MongoDB connection string
-- Redis connection details
-- Spotify API credentials (Client ID, Client Secret, Redirect URI)
-- JWT secret
-- Frontend URLs for CORS
-
-## 🐛 Troubleshooting
-
-### MongoDB Connection Issues
-```bash
-# Check if MongoDB is running
-sudo systemctl status mongod
-
-# Start MongoDB
-sudo systemctl start mongod
-```
-
-### Redis Connection Issues
-```bash
-# Check if Redis is running
-redis-cli ping  # Should return "PONG"
-
-# Start Redis
-sudo systemctl start redis
-```
-
-### Port Already in Use
-If a port is already in use, either:
-- Kill the process using that port: `lsof -i :<port>` then `kill -9 <PID>`
-- Change the port in the respective config file
-
-## 📝 License
-
-This project is proprietary software. All rights reserved.
-
-## 🤝 Contributing
-
-This is a private project. Contact the repository owner for contribution guidelines.
-
-## 📧 Support
-
-For questions or issues, refer to the documentation files or contact support.
-
----
-
-**Built with ❤️ for music lovers and party enthusiasts**
-
-🎵 TuneSlam - Where the crowd controls the vibe! 🎉
+* **Sessions** are owned by a single admin and identified by a URL slug
+  (e.g. `tuneslam.com/the-tap-room`).
+* **Queue** is sorted by net votes; the **top item is locked** as soon as
+  the now-playing song crosses 50% so people can't vote-bomb the next pick.
+* **Autofill** keeps the queue alive when nobody is around: the admin
+  configures a "fallback" Spotify playlist, and the backend pulls songs from
+  it when the queue length drops below the configured threshold.
+* **Stats** track how many songs each user has added/played and crowd
+  approval (karma).
+* **Realtime updates** travel over Socket.IO (`queue:update`,
+  `nowPlaying:update`, `user:blocked`, `player:command`).
+* **Spotify tokens** are encrypted at rest with `TOKEN_ENC_KEY`
+  (AES-256-GCM, see `backend/src/utils/crypto.ts`).
+* **Player tabs** identify themselves with a per-tab `instanceId`. Opening
+  a new player tab steals the role from the previous one (the old tab is
+  notified via heartbeat 409 and stops).

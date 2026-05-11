@@ -1,35 +1,30 @@
 {
-  "name": "tuneslam",
-  "version": "1.0.0",
-  "description": "Collaborative music queue application for parties and bars",
+  "name": "tuneslam-ai",
+  "version": "0.1.0",
   "private": true,
+  "description": "TuneSlam – collaborative, real-time, community-driven Spotify queues",
   "workspaces": [
+    "shared",
     "backend",
-    "frontend/admin",
-    "frontend/user",
-    "frontend/viewer"
+    "frontends/admin",
+    "frontends/user",
+    "frontends/player"
   ],
-  "scripts": {
-    "install-all": "npm install && cd backend && npm install && cd ../frontend/admin && npm install && cd ../user && npm install && cd ../viewer && npm install",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:admin\" \"npm run dev:user\" \"npm run dev:viewer\"",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:admin": "cd frontend/admin && npm run dev",
-    "dev:user": "cd frontend/user && npm run dev",
-    "dev:viewer": "cd frontend/viewer && npm run dev"
+  "engines": {
+    "node": ">=20"
   },
-  "keywords": [
-    "music",
-    "spotify",
-    "queue",
-    "voting",
-    "realtime"
-  ],
-  "author": "",
-  "license": "MIT",
+  "scripts": {
+    "build:shared": "npm --workspace shared run build",
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:admin": "npm --workspace @tuneslam/admin run dev",
+    "dev:user": "npm --workspace @tuneslam/user run dev",
+    "dev:player": "npm --workspace @tuneslam/player run dev",
+    "dev": "npm run build:shared && concurrently -n backend,admin,user,player -c blue,green,magenta,yellow \"npm run dev:backend\" \"npm run dev:admin\" \"npm run dev:user\" \"npm run dev:player\"",
+    "build": "npm run build:shared && npm --workspace backend run build && npm --workspace @tuneslam/admin run build && npm --workspace @tuneslam/user run build && npm --workspace @tuneslam/player run build",
+    "lint": "echo 'Per-workspace lint configs.'",
+    "test": "npm --workspace backend run test"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "dotenv-flow": "^4.1.0"
   }
 }
