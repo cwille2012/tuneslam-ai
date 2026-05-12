@@ -4,6 +4,7 @@ import {
   SessionSettings,
   SpotifyTrackSnapshot,
 } from '@tuneslam/shared';
+import type { AddedByKind } from './QueueItem';
 
 export interface NowPlayingState {
   track: SpotifyTrackSnapshot | null;
@@ -14,7 +15,24 @@ export interface NowPlayingState {
   markedPlayed: boolean;
   /** ID of the queue item this corresponds to (so we can resume). */
   sourceQueueItemId?: mongoose.Types.ObjectId;
+  /**
+   * Snapshot of the source queue item's `addedBy` taken at promotion
+   * time. We need this here because by the time the track ends, the
+   * underlying QueueItem has already been deleted (we delete the doc
+   * the moment the track becomes now-playing — see advanceQueue) and
+   * we'd otherwise have nothing to credit on the PlayedSong row.
+   *
+   * Optional because legacy sessions persisted before this field was
+   * added won't have it; advanceQueue falls back to a synthetic
+   * "Auto-fill" credit if absent.
+   */
+  addedBy?: {
+    kind: AddedByKind;
+    id: mongoose.Types.ObjectId | null;
+    label: string;
+  };
 }
+
 
 export interface SessionDoc extends Document {
   _id: mongoose.Types.ObjectId;
@@ -78,7 +96,13 @@ const SessionSchema = new Schema<SessionDoc>(
       progressMs: { type: Number, default: 0 },
       markedPlayed: { type: Boolean, default: false },
       sourceQueueItemId: { type: Schema.Types.ObjectId },
+      addedBy: {
+        kind: { type: String, enum: ['admin', 'user', 'recommended'] },
+        id: { type: Schema.Types.ObjectId, default: null },
+        label: { type: String },
+      },
     },
+
     lockedNextQueueItemId: { type: Schema.Types.ObjectId, default: null },
   },
   { timestamps: true },

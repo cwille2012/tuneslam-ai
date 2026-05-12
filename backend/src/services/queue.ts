@@ -248,12 +248,52 @@ export async function removeQueueItem(
 }
 
 /**
- * Advance to the next track. Removes the current top item, marks it as played,
- * and returns the new now-playing track (if any).
+ * Result of {@link advanceQueue}. `played` carries the just-finished
+ * track's metadata (track snapshot + addedBy credit) so callers can
+ * apply karma/leaderboard adjustments. We deliberately don't return
+ * the full Mongoose `QueueItemDoc` for the played item anymore — the
+ * underlying QueueItem doc is deleted at promotion time, so we work
+ * off the snapshot we keep on `session.nowPlaying`. See `advanceQueue`
+ * for the full reasoning.
  */
-export async function advanceQueue(
-  session: SessionDoc,
-): Promise<{ played?: QueueItemDoc; nowPlaying?: QueueItemDoc }> {
+export interface AdvanceQueueResult {
+  /** Snapshot of the song that just finished, if any was archived. */
+  played?: {
+    track: SpotifyTrackSnapshot;
+    addedBy: {
+      kind: 'admin' | 'user' | 'recommended';
+      id: mongoose.Types.ObjectId | null;
+      label: string;
+    };
+  };
+  /** The newly-promoted track's queue item, if there was one. */
+  nowPlaying?: QueueItemDoc;
+}
+
+/**
+ * Advance to the next track.
+ *
+ * Two things happen here:
+ *   1. If the *previous* now-playing track was marked played
+ *      (`session.nowPlaying.markedPlayed === true`), archive it to
+ *      `PlayedSong` for the History page.
+ *   2. Promote the next queue item (locked-next if one exists,
+ *      otherwise the top of the ordered queue) into the session's
+ *      `nowPlaying`. Delete its QueueItem doc so it doesn't reappear
+ *      in the queue list — the session is now its source of truth.
+ *
+ * **Why we archive from `session.nowPlaying`, not from the QueueItem.**
+ * The instinctive thing is to look up the source QueueItem via
+ * `session.nowPlaying.sourceQueueItemId` and read `track`/`addedBy`
+ * off that doc. That doesn't work: the QueueItem is deleted on the
+ * *previous* call to `advanceQueue` (see the `await nextItem.deleteOne()`
+ * below), so by the time the track ends the doc is gone, the lookup
+ * returns `null`, and nothing ever gets written to `PlayedSong`.
+ * That was the long-standing "History page is always empty" bug. We
+ * now keep a snapshot of `addedBy` directly on `session.nowPlaying`
+ * (see Session.ts) and archive from that.
+ */
+export async function advanceQueue(session: SessionDoc): Promise<AdvanceQueueResult> {
   // Identify the locked-next item if present, otherwise the natural top.
   let nextItem: QueueItemDoc | null = null;
   if (session.lockedNextQueueItemId) {
@@ -264,20 +304,26 @@ export async function advanceQueue(
     nextItem = ordered[0] ?? null;
   }
 
-  // Move the now-playing into PlayedSong if the current track was marked as played.
-  let played: QueueItemDoc | undefined;
-  if (session.nowPlaying.markedPlayed && session.nowPlaying.sourceQueueItemId) {
-    const cur = await QueueItem.findById(session.nowPlaying.sourceQueueItemId);
-    if (cur) {
-      await PlayedSong.create({
-        sessionId: session._id,
-        track: cur.track,
-        addedBy: cur.addedBy,
-        playedAt: new Date(),
-      });
-      await cur.deleteOne();
-      played = cur;
-    }
+  // Archive the *previous* now-playing if it was credited as played.
+  // We work off the snapshot stored on the session — the underlying
+  // QueueItem doc was deleted when this track was promoted.
+  let played: AdvanceQueueResult['played'];
+  if (session.nowPlaying.markedPlayed && session.nowPlaying.track) {
+    const addedBy = session.nowPlaying.addedBy ?? {
+      // Legacy / pre-migration sessions: no snapshot was captured at
+      // promotion time. Credit it to the system rather than failing
+      // the write outright.
+      kind: 'recommended' as const,
+      id: null,
+      label: 'Auto-fill',
+    };
+    await PlayedSong.create({
+      sessionId: session._id,
+      track: session.nowPlaying.track,
+      addedBy,
+      playedAt: new Date(),
+    });
+    played = { track: session.nowPlaying.track, addedBy };
   }
 
   if (!nextItem) {
@@ -288,12 +334,17 @@ export async function advanceQueue(
       markedPlayed: false,
       sourceQueueItemId: undefined,
       startedAt: undefined,
+      addedBy: undefined,
     };
     session.lockedNextQueueItemId = null;
     await session.save();
     return { played };
   }
 
+  // Promote the next item. Snapshot its `addedBy` onto the session so
+  // we can credit it to History when *this* track ends. After the
+  // delete below, the QueueItem doc is gone — `nowPlaying.addedBy` is
+  // the only place that information survives.
   session.nowPlaying = {
     track: nextItem.track,
     startedAt: new Date(),
@@ -301,13 +352,18 @@ export async function advanceQueue(
     progressMs: 0,
     markedPlayed: false,
     sourceQueueItemId: nextItem._id,
+    addedBy: {
+      kind: nextItem.addedBy.kind,
+      id: nextItem.addedBy.id ?? null,
+      label: nextItem.addedBy.label,
+    },
   };
-  // Remove the now-playing from the queue itself; it has its own state on the session.
   await nextItem.deleteOne();
   session.lockedNextQueueItemId = null;
   await session.save();
   return { played, nowPlaying: nextItem };
 }
+
 
 /**
  * If the current track has less than `lockAheadSec` seconds remaining, lock the next item.
@@ -353,7 +409,9 @@ export async function resetQueue(session: SessionDoc): Promise<void> {
     markedPlayed: false,
     sourceQueueItemId: undefined,
     startedAt: undefined,
+    addedBy: undefined,
   };
   session.lockedNextQueueItemId = null;
   await session.save();
 }
+
