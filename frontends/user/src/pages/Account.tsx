@@ -1,6 +1,36 @@
 import { useEffect, useState } from 'react';
-import { api, errMsg, API_BASE } from '../lib/api';
-import type { UserAccount } from '../App';
+import { api, errMsg } from '../lib/api';
+
+import type { LinkedProviderProfile, UserAccount } from '../App';
+
+/**
+ * Compact row showing the linked-account avatar + display name. Falls back
+ * gracefully when the provider didn't return a name or picture.
+ */
+function LinkedProviderRow({ profile }: { profile?: LinkedProviderProfile }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {profile?.pictureUrl ? (
+        <img
+          src={profile.pictureUrl}
+          alt=""
+          width={36}
+          height={36}
+          style={{ borderRadius: '50%', objectFit: 'cover', flex: '0 0 auto' }}
+          // If the provider URL goes stale (FB CDN URLs eventually expire),
+          // hide the broken image rather than show a busted thumbnail.
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      ) : null}
+      <div className="mute">
+        Linked ✓{profile?.name ? ` — ${profile.name}` : ''}
+      </div>
+    </div>
+  );
+}
+
 
 export default function Account({ account, setAccount }: { account: UserAccount; setAccount: (a: UserAccount) => void }) {
   const [form, setForm] = useState({ username: account.username, email: account.email, phone: account.phone || '' });
@@ -27,7 +57,28 @@ export default function Account({ account, setAccount }: { account: UserAccount;
       setMsg('Password updated.'); setPw({ currentPassword: '', newPassword: '' });
     } catch (e: any) { setErr(errMsg(e)); }
   }
-  function facebookLink() { window.location.href = `${API_BASE}/api/auth/facebook/login/start`; }
+  // Use the *authenticated* link endpoint (mirrors `spotifyLink` below) so
+  // the backend knows which already-signed-in user to attach FB to. A
+  // top-level navigation to `/login/start` would have no Authorization
+  // header, which is why an earlier version of this code accidentally ran
+  // the find-or-create login flow and silently swapped the active user
+  // (clobbering Spotify-linked state in the process).
+  async function facebookLink() {
+    setErr(''); setMsg('');
+    try {
+      const r = await api.get('/api/auth/facebook/link/url');
+      window.location.href = r.data.url;
+    } catch (e: any) { setErr(errMsg(e)); }
+  }
+  async function facebookUnlink() {
+    setErr(''); setMsg('');
+    try {
+      const r = await api.post('/api/auth/facebook/unlink');
+      setAccount(r.data.account);
+      setMsg('Facebook unlinked.');
+    } catch (e: any) { setErr(errMsg(e)); }
+  }
+
   async function spotifyLink() {
     try {
       // The /url endpoint requires the auth header (axios attaches it),
@@ -66,19 +117,61 @@ export default function Account({ account, setAccount }: { account: UserAccount;
       </form>
       <div className="card col">
         <h2>Facebook</h2>
-        <div className="mute">Status: {account.facebookLinked ? 'Linked ✓' : 'Not linked'}</div>
-        {!account.facebookLinked && <button className="btn" onClick={facebookLink}>Link Facebook</button>}
+        {account.facebookLinked
+          ? <LinkedProviderRow profile={account.facebookProfile} />
+          : <div className="mute">Status: Not linked</div>}
+        {account.facebookLinked
+          ? <button className="btn" onClick={facebookUnlink}>Unlink Facebook</button>
+          : <button className="btn" onClick={facebookLink}>Link Facebook</button>}
       </div>
+
       <div className="card col">
         <h2>Spotify</h2>
         <div className="mute">
           Link your Spotify so you can add songs from your library and playlists.
         </div>
-        <div className="mute">Status: {account.spotifyLinked ? 'Linked ✓' : 'Not linked'}</div>
-        {account.spotifyLinked
-          ? <button className="btn" onClick={spotifyUnlink}>Unlink Spotify</button>
-          : <button className="btn btn-primary" onClick={spotifyLink}>Link Spotify</button>}
+        {account.spotifyLinked ? (
+          // Inline row: small round Spotify avatar sits directly next to
+          // the Unlink button so the user can see whose Spotify is
+          // currently attached at a glance. Display name (if any) is
+          // appended to the button label.
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {account.spotifyProfile?.pictureUrl && (
+              <img
+                src={account.spotifyProfile.pictureUrl}
+                alt=""
+                width={36}
+                height={36}
+                style={{
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  flex: '0 0 auto',
+                }}
+                // Spotify CDN URLs can rotate; hide a busted image instead
+                // of showing a broken-image icon.
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            )}
+            <button className="btn" onClick={spotifyUnlink}>
+              Unlink Spotify
+              {account.spotifyProfile?.name
+                ? ` (${account.spotifyProfile.name})`
+                : ''}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mute">Status: Not linked</div>
+            <button className="btn btn-primary" onClick={spotifyLink}>
+              Link Spotify
+            </button>
+          </>
+        )}
+
       </div>
+
       {stats && (
         <div className="card">
           <h2>Stats</h2>

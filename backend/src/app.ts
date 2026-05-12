@@ -29,7 +29,18 @@ export function createApp() {
   );
   app.use(express.json({ limit: '256kb' }));
   app.use(express.urlencoded({ extended: true, limit: '256kb' }));
-  app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  // Player progress + heartbeat are sent on a tight cadence (every few
+  // seconds, per active player tab) and would otherwise dominate the dev
+  // log with hundreds of essentially-identical 200s. Skip them in morgan
+  // — they're still served, just not logged.
+  app.use(
+    morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+      skip: (req) =>
+        req.url === '/api/player/progress' ||
+        req.url === '/api/player/heartbeat',
+    }),
+  );
+
 
   app.use('/api', publicRouter);
   app.use('/api/auth/admin', authAdminRouter);

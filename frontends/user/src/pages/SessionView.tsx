@@ -189,9 +189,33 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
             </div>
             <div className="votes">{it.netVotes >= 0 ? `+${it.netVotes}` : it.netVotes}</div>
             <div className="actions">
-              <button className={`btn btn-sm ${it.myVote === 1 ? 'btn-primary' : ''}`} onClick={() => vote(it.id, 1)} disabled={it.locked}>▲</button>
-              <button className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`} onClick={() => vote(it.id, -1)} disabled={it.locked}>▼</button>
+              {/*
+                You can't vote on your own song (the backend 403s the
+                attempt anyway, with "You cannot vote on your own song.").
+                Show a "Your song" tag so it's clear at a glance which
+                track in the queue is yours, instead of presenting up/down
+                arrows that would just error.
+              */}
+              {account && it.addedBy.kind === 'user' && it.addedBy.id === account.id ? (
+                <span className="tag mute">Your song</span>
+              ) : (
+                <>
+                  <button
+                    className={`btn btn-sm ${it.myVote === 1 ? 'btn-primary' : ''}`}
+                    onClick={() => vote(it.id, 1)}
+                    disabled={it.locked}
+                    aria-pressed={it.myVote === 1}
+                  >▲</button>
+                  <button
+                    className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
+                    onClick={() => vote(it.id, -1)}
+                    disabled={it.locked}
+                    aria-pressed={it.myVote === -1}
+                  >▼</button>
+                </>
+              )}
             </div>
+
           </div>
         ))}
       </div>

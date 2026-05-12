@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Routes, Route, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+
 import { api, errMsg, getToken, setToken } from './lib/api';
 import { usePlayer } from './lib/usePlayer';
+import { ActivityTicker } from './components/ActivityTicker';
+
 
 export default function App() {
   return (
@@ -41,9 +44,51 @@ function PlayerInner({ slug, err, onErr }: { slug: string; err: string; onErr: (
   const player = usePlayer(slug, onErr);
   const userJoinUrl = `${(import.meta as any).env.VITE_USER_URL}/${slug}`;
 
+  // The QR code never changes during a session, but the parent re-renders
+  // twice a second (progress bar tick) and `<QRCodeSVG>` is non-trivial
+  // — it generates 400+ SVG paths every render. Memoizing it removes
+  // that work from the hot path and avoids GPU contention with the
+  // Spotify Web Playback SDK's audio worker (which manifested as
+  // intermittent audio glitches).
+  const qrSvg = useMemo(
+    () => <QRCodeSVG value={userJoinUrl} size={96} />,
+    [userJoinUrl],
+  );
+
+
   return (
     <div className="player-root">
       {err && <div className="error" style={{ position: 'fixed', top: 12, left: 12, right: 12, zIndex: 99 }}>{err}</div>}
+
+      {/*
+        Header bar: TuneSlam logo on the left, the session join URL +
+        QR code on the right. The logo asset lives in
+        `frontends/player/public/logo-wide-full.png` and is served by
+        Vite from the site root. The URL text is colored with the
+        accent (Spotify green, #1db954) which matches the logo so the
+        eye stitches them together as one unit.
+      */}
+      <header className="player-header">
+        <img
+          src="/logo-wide-full.png"
+          alt="TuneSlam"
+          className="player-logo"
+          // The logo is the brand mark, so screen readers can pick up
+          // the alt text; we don't need it as a heading.
+        />
+        <div className="spacer" />
+        <div className="player-join">
+          <div className="player-join-text">
+            <div className="player-join-label">Scan to join</div>
+            <div className="player-join-url">{userJoinUrl}</div>
+          </div>
+          <div className="player-qr">
+            {qrSvg}
+          </div>
+
+        </div>
+      </header>
+
       <div className="player-grid">
         <div className="player-now">
           {player.nowPlaying?.track ? (
@@ -66,7 +111,7 @@ function PlayerInner({ slug, err, onErr }: { slug: string; err: string; onErr: (
 
         <div className="player-side">
           <h3>Up next</h3>
-          <div className="list" style={{ marginBottom: 16 }}>
+          <div className="list">
             {player.queue.slice(0, 8).map((it: any, i: number) => (
               <div key={it.id} className={`queue-item ${it.locked ? 'locked' : ''}`}>
                 <div className="pos">{i + 1}</div>
@@ -80,19 +125,17 @@ function PlayerInner({ slug, err, onErr }: { slug: string; err: string; onErr: (
             ))}
             {player.queue.length === 0 && <div className="mute">Empty.</div>}
           </div>
-
-          <h3>Join the party</h3>
-          <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
-            <div style={{ background: '#fff', padding: 8, borderRadius: 8 }}>
-              <QRCodeSVG value={userJoinUrl} size={140} />
-            </div>
-            <div>
-              <div className="mute">Scan or visit</div>
-              <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>{userJoinUrl}</div>
-            </div>
-          </div>
         </div>
       </div>
+
+      {/*
+        Activity ticker — fixed footer, slides events right→left as
+        users add songs / vote / join. Subscribes to the same socket
+        the queue+nowplaying do; render-only when the socket is up.
+      */}
+      <ActivityTicker socket={(player as any).socket} />
     </div>
   );
+
 }
+

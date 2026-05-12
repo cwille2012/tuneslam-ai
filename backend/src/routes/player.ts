@@ -99,6 +99,12 @@ router.post('/progress', validate(progressSchema), async (req: AuthedRequest, re
     if (!session.nowPlaying.track) {
       return res.json({ ok: true });
     }
+    // A change in pause state must propagate to clients *immediately* —
+    // the admin/user UIs render their Play/Pause button off this flag,
+    // and waiting for the next 5 s scheduled broadcast was the cause of
+    // "I clicked Pause but the button still says Play; clicking again
+    // works." Detect the change before mutating the doc.
+    const pauseChanged = session.nowPlaying.isPaused !== req.body.isPaused;
     session.nowPlaying.progressMs = req.body.progressMs;
     session.nowPlaying.isPaused = req.body.isPaused;
     await session.save();
@@ -113,6 +119,11 @@ router.post('/progress', validate(progressSchema), async (req: AuthedRequest, re
       // top item — otherwise the lock state only flips client-side after
       // the next add/vote/skip event.
       if (lockedNext) await broadcastQueue(fresh ?? session);
+    } else if (pauseChanged) {
+      // Always broadcast on a pause↔play transition so UIs flip their
+      // button instantly. (Don't fold this into the throttled branch
+      // below — that intentionally drops most progress posts.)
+      broadcastNowPlaying(session, nowPlayingDTO(session));
     } else {
       // Throttle: only broadcast progress occasionally - we still send so user UIs stay in sync.
       // Simple coarse-grained: every ~5s based on progressMs % 5000.
@@ -120,6 +131,7 @@ router.post('/progress', validate(progressSchema), async (req: AuthedRequest, re
         broadcastNowPlaying(session, nowPlayingDTO(session));
       }
     }
+
     res.json({ ok: true, lockedNextItemId: session.lockedNextQueueItemId?.toString() ?? null });
   } catch (e) {
     next(e);

@@ -9,6 +9,11 @@ import SessionView from './pages/SessionView';
 import FacebookCallback from './pages/FacebookCallback';
 import SpotifyCallback from './pages/SpotifyCallback';
 
+export interface LinkedProviderProfile {
+  name?: string;
+  pictureUrl?: string;
+}
+
 export interface UserAccount {
   id: string;
   username: string;
@@ -16,7 +21,11 @@ export interface UserAccount {
   phone?: string | null;
   facebookLinked: boolean;
   spotifyLinked: boolean;
+  /** Provider profile metadata captured at link-time (only present when linked). */
+  facebookProfile?: LinkedProviderProfile;
+  spotifyProfile?: LinkedProviderProfile;
 }
+
 
 export default function App() {
   const [account, setAccount] = useState<UserAccount | null>(null);

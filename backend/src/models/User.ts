@@ -16,6 +16,20 @@ export interface UserDoc extends Document {
     refreshToken?: EncryptedBlob | null;
     scope?: string;
   };
+  /**
+   * Cached profile metadata (display name + avatar) captured at link-time
+   * from the third-party OAuth provider. Persisted so the UI can show the
+   * user's name/picture without re-hitting Graph/Spotify on every render.
+   */
+  facebookProfile?: {
+    name?: string;
+    pictureUrl?: string;
+  };
+  spotifyProfile?: {
+    name?: string;
+    pictureUrl?: string;
+  };
+
 
   // Stats counters (updated as actions occur).
   stats: {
@@ -51,8 +65,17 @@ const UserSchema = new Schema<UserDoc>(
       refreshToken: { type: EncryptedBlobSchema, default: null },
       scope: String,
     },
+    facebookProfile: {
+      name: String,
+      pictureUrl: String,
+    },
+    spotifyProfile: {
+      name: String,
+      pictureUrl: String,
+    },
 
     stats: {
+
       songsAdded: { type: Number, default: 0 },
       songsUpvoted: { type: Number, default: 0 },
       songsDownvoted: { type: Number, default: 0 },

@@ -25,6 +25,14 @@ export const SOCKET_EVENTS = {
   playerClaim: 'player:claim',
   playerProgress: 'player:progress',
   autofillAdded: 'autofill:added',
+  /**
+   * Player activity ticker stream. Server emits one
+   * `ActivityEventDTO` per user-visible action (song added, vote, join,
+   * etc.). The player tab's <ActivityTicker> is the primary consumer;
+   * other surfaces are free to ignore.
+   */
+  activityEvent: 'activity:event',
 } as const;
+
 
 export const RECOMMENDED_USER_ID = 'recommended';

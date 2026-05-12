@@ -24,7 +24,9 @@ import {
   getTrack,
   getAdminAccessToken,
 } from '../services/spotify';
-import { broadcastQueue } from '../services/realtime';
+import { broadcastQueue, broadcastActivity } from '../services/realtime';
+import { actorFromUser, buildActivityEvent } from '../services/activity';
+
 import { applySongAddedStats, applyVoteStats } from '../services/stats';
 
 const router = Router();
@@ -177,9 +179,20 @@ router.post(
         });
         await applySongAddedStats('user', user._id.toString());
         await broadcastQueue(session);
+        // Activity ticker: surface the add to the player tab. Same actor
+        // shape used everywhere else (FB > Spotify > username).
+        broadcastActivity(
+          session.slug,
+          buildActivityEvent('songAdded', actorFromUser(user), {
+            id: track.id,
+            title: track.name,
+            artist: track.artists.map((a) => a.name).join(', '),
+          }),
+        );
         res.json({
           item: serializeItem(item, { voter: { kind: 'user', id: user._id.toString() } }),
         });
+
       } catch (e: any) {
         if (e instanceof QueueRejection) {
           return res.status(409).json({ error: e.reason, blacklisted: e.blacklisted });
@@ -225,7 +238,30 @@ router.post(
         });
       }
       await broadcastQueue(session);
+      // Ticker: only surface a *newly applied* vote (myVote === pressed),
+      // not toggling-off (which feels like noise on the wall display).
+      // outcome.item is null when the vote caused the item to be removed
+      // by the downvote threshold; we still surface that downvote since
+      // it's a real action.
+      if (outcome.myVote !== 0 && outcome.myVote === req.body.pressed) {
+        const trackInfo = outcome.item
+          ? {
+              id: outcome.item.track.id,
+              title: outcome.item.track.name,
+              artist: outcome.item.track.artists.map((a: any) => a.name).join(', '),
+            }
+          : undefined;
+        broadcastActivity(
+          session.slug,
+          buildActivityEvent(
+            req.body.pressed === 1 ? 'voteUp' : 'voteDown',
+            actorFromUser(user),
+            trackInfo,
+          ),
+        );
+      }
       res.json({ removed: outcome.removed, myVote: outcome.myVote });
+
     } catch (e) {
       next(e);
     }

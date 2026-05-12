@@ -20,15 +20,33 @@ export function publicAdmin(admin: AdminDoc): PublicAdmin {
 }
 
 export function publicUser(user: UserDoc): PublicUser {
+  // Include cached provider profile metadata (display name + avatar) so the
+  // user-facing UI can show "Linked as 'Jane Doe'" with a thumbnail without
+  // re-hitting the third-party APIs.
+  const fb = user.facebookId
+    ? {
+        name: user.facebookProfile?.name,
+        pictureUrl: user.facebookProfile?.pictureUrl,
+      }
+    : undefined;
+  const sp = user.spotify?.accessToken
+    ? {
+        name: user.spotifyProfile?.name,
+        pictureUrl: user.spotifyProfile?.pictureUrl,
+      }
+    : undefined;
   return {
     id: user._id.toString(),
     username: user.username,
     email: user.email,
     facebookLinked: Boolean(user.facebookId),
     spotifyLinked: Boolean(user.spotify?.accessToken),
+    facebookProfile: fb,
+    spotifyProfile: sp,
     karma: user.stats?.karma ?? 0,
   };
 }
+
 
 export function userStats(user: UserDoc): UserStats {
   return {

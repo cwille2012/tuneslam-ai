@@ -7,11 +7,41 @@ import { Session, SessionDoc } from '../models/Session';
 import { SessionParticipant } from '../models/SessionParticipant';
 import { Admin } from '../models/Admin';
 import { User } from '../models/User';
-import { SOCKET_EVENTS, NowPlayingDTO, QueueItemDTO } from '@tuneslam/shared';
-import { serializeQueue } from './queue';
+import { SOCKET_EVENTS, NowPlayingDTO, QueueItemDTO, ActivityEventDTO } from '@tuneslam/shared';
+import { getOrderedQueue, serializeItem, serializeQueue } from './queue';
 import { nowPlayingDTO } from './serializers';
+import { actorFromUser, buildActivityEvent } from './activity';
+
+
 
 let io: IoServer | null = null;
+
+/**
+ * Per-(slug,userId) cooldown for `userJoined` ticker events. Without it
+ * a flaky network or React StrictMode double-mount would spam the
+ * ticker with the same join. 60 s feels short enough that a real
+ * re-join (after stepping away) still surfaces, while a reconnect
+ * blip is suppressed.
+ */
+const RECENT_JOIN_TTL_MS = 60_000;
+const recentJoins = new Map<string, number>();
+function shouldEmitJoin(slug: string, userId: string): boolean {
+  const key = `${slug}:${userId}`;
+  const now = Date.now();
+  const last = recentJoins.get(key);
+  if (last && now - last < RECENT_JOIN_TTL_MS) return false;
+  recentJoins.set(key, now);
+  // Lazy GC: when the map grows past 5k entries, drop everything older
+  // than the TTL. Cheap, and the population stays bounded by active
+  // session count.
+  if (recentJoins.size > 5000) {
+    for (const [k, t] of recentJoins) {
+      if (now - t > RECENT_JOIN_TTL_MS) recentJoins.delete(k);
+    }
+  }
+  return true;
+}
+
 
 interface AuthedSocket extends Socket {
   data: {
@@ -67,14 +97,39 @@ export function initRealtime(httpServer: HttpServer): IoServer {
       // to wait for the next mutation to populate. Without this, a client
       // that joins after songs are queued would see an empty queue until
       // someone votes/adds.
+      //
+      // The snapshot is *personalized* (myVote populated) so the user's
+      // own up/down arrows render in their pressed state on (re)join —
+      // a refresh otherwise resets every button to the unpressed state.
       try {
-        const items = await serializeQueue(session._id);
+        const ordered = await getOrderedQueue(session._id);
+        const voter = voterFromSocket(s);
+        const items = ordered.map((it) => serializeItem(it, { voter }));
         s.emit(SOCKET_EVENTS.queueUpdate, { items });
         s.emit(SOCKET_EVENTS.nowPlayingUpdate, nowPlayingDTO(session));
       } catch (err) {
         logger.warn({ err }, 'failed to send initial session snapshot');
       }
+
+      // Emit a `userJoined` ticker event the first time *this user*
+      // joins the session in a 60 s window. We fetch the user doc only
+      // when we actually intend to emit so we don't add a Mongo round
+      // trip to every reconnect.
+      if (s.data.auth?.aud === 'usr' && s.data.auth.sub) {
+        if (shouldEmitJoin(slug, s.data.auth.sub)) {
+          try {
+            const user = await User.findById(s.data.auth.sub);
+            if (user) {
+              broadcastActivity(slug, buildActivityEvent('userJoined', actorFromUser(user)));
+            }
+          } catch (err) {
+            logger.warn({ err }, 'failed to emit userJoined ticker event');
+          }
+        }
+      }
+
     });
+
 
     s.on(SOCKET_EVENTS.leaveSession, (slug: string) => {
       if (typeof slug === 'string') s.leave(roomFor(slug));
@@ -92,13 +147,50 @@ export function roomFor(slug: string): string {
   return `session:${slug}`;
 }
 
+/**
+ * Map an authed socket to a `voter` shape suitable for `serializeItem`.
+ * Returns null for sockets without a recognised audience (e.g. player tabs)
+ * so they get an anonymous snapshot.
+ */
+function voterFromSocket(
+  s: AuthedSocket,
+): { kind: 'admin' | 'user'; id: string } | null {
+  const aud = s.data.auth?.aud;
+  const sub = s.data.auth?.sub;
+  if (!sub) return null;
+  if (aud === 'adm') return { kind: 'admin', id: sub };
+  if (aud === 'usr') return { kind: 'user', id: sub };
+  return null;
+}
+
 export async function broadcastQueue(session: SessionDoc): Promise<void> {
   if (!io) return;
-  // Anonymous queue snapshot (no per-voter myVote). Each client requests
-  // their own queue via REST when they need myVote populated.
-  const items = await serializeQueue(session._id);
-  io.to(roomFor(session.slug)).emit(SOCKET_EVENTS.queueUpdate, { items });
+  const roomName = roomFor(session.slug);
+  const sids = io.sockets.adapter.rooms.get(roomName);
+  if (!sids?.size) return;
+
+  // Personalize per-socket so each user/admin sees `myVote` populated for
+  // their own votes. Otherwise the anonymous snapshot would clear every
+  // up/down arrow's "pressed" state on every queue mutation. We do a
+  // single DB read and re-serialize per socket from the in-memory docs.
+  const ordered = await getOrderedQueue(session._id);
+  let anonItems: QueueItemDTO[] | null = null;
+
+  for (const sid of sids) {
+    const sock = io.sockets.sockets.get(sid) as AuthedSocket | undefined;
+    if (!sock) continue;
+    const voter = voterFromSocket(sock);
+    if (voter) {
+      sock.emit(SOCKET_EVENTS.queueUpdate, {
+        items: ordered.map((it) => serializeItem(it, { voter })),
+      });
+    } else {
+      if (!anonItems) anonItems = ordered.map((it) => serializeItem(it));
+      sock.emit(SOCKET_EVENTS.queueUpdate, { items: anonItems });
+    }
+  }
 }
+
 
 export function broadcastNowPlaying(session: SessionDoc, dto: NowPlayingDTO): void {
   if (!io) return;
@@ -133,3 +225,16 @@ export function broadcastAutofillAdded(slug: string, count: number): void {
   if (!io) return;
   io.to(roomFor(slug)).emit(SOCKET_EVENTS.autofillAdded, { count });
 }
+
+/**
+ * Push a single activity ticker event to every socket in the session
+ * room. The player tab's <ActivityTicker> is the primary consumer;
+ * other UIs are free to ignore the event. Routes wanting to add a new
+ * ticker entry should call this — see services/activity.ts for the
+ * actor/event constructors.
+ */
+export function broadcastActivity(slug: string, event: ActivityEventDTO): void {
+  if (!io) return;
+  io.to(roomFor(slug)).emit(SOCKET_EVENTS.activityEvent, event);
+}
+

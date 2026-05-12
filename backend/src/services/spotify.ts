@@ -111,12 +111,36 @@ async function refreshAccessToken(refreshToken: string): Promise<SpotifyTokens> 
   };
 }
 
-export async function fetchSpotifyProfile(accessToken: string) {
+export interface SpotifyProfile {
+  id: string;
+  email?: string;
+  display_name?: string;
+  /** Largest available avatar URL (Spotify returns 0..n images). */
+  pictureUrl?: string;
+}
+
+export async function fetchSpotifyProfile(accessToken: string): Promise<SpotifyProfile> {
   const res = await axios.get(`${SPOTIFY_API_URL}/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return res.data as { id: string; email?: string; display_name?: string };
+  const raw = res.data as {
+    id: string;
+    email?: string;
+    display_name?: string;
+    images?: { url: string; height?: number | null; width?: number | null }[];
+  };
+  // Pick the largest image; fall back to first; otherwise none.
+  const sorted = (raw.images ?? [])
+    .slice()
+    .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
+  return {
+    id: raw.id,
+    email: raw.email,
+    display_name: raw.display_name,
+    pictureUrl: sorted[0]?.url || raw.images?.[0]?.url,
+  };
 }
+
 
 export async function handleAdminCallback(code: string, admin: AdminDoc): Promise<void> {
   const tokens = await exchangeCodeForTokens(code);
@@ -145,9 +169,14 @@ export async function handleUserCallback(
     accessTokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
     scope: tokens.scope,
   };
+  user.spotifyProfile = {
+    name: profile.display_name,
+    pictureUrl: profile.pictureUrl,
+  };
   await user.save();
   if (!options.autoLink) return;
 }
+
 
 /** Exchange a code into a freshly-created or matched User account (Spotify-as-login flow). */
 export async function loginUserWithSpotify(code: string): Promise<UserDoc> {
@@ -184,12 +213,17 @@ export async function loginUserWithSpotify(code: string): Promise<UserDoc> {
     accessTokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
     scope: tokens.scope,
   };
+  user.spotifyProfile = {
+    name: profile.display_name,
+    pictureUrl: profile.pictureUrl,
+  };
   user.lastLogin = new Date();
   await user.save();
   return user;
 }
 
 /** Returns a valid (refreshed if necessary) access token for an admin. */
+
 export async function getAdminAccessToken(admin: AdminDoc): Promise<string> {
   if (!admin.spotify || !admin.spotify.accessToken) {
     throw badRequest('Admin has not linked Spotify');

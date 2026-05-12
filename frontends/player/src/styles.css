@@ -97,12 +97,227 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
 th { color: var(--fg-2); font-weight: 600; }
 
-.player-root { min-height: 100vh; background: linear-gradient(135deg, #0a0a0a 0%, #131313 100%); }
-.player-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; padding: 32px; height: 100vh; }
-@media (max-width: 800px) { .player-grid { grid-template-columns: 1fr; height: auto; } }
-.player-now { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+/*
+ * Lock the player to exactly the viewport so the queue side-panel scrolls
+ * internally instead of pushing the page taller than the screen. We do
+ * this with flexbox rather than a hard-coded `calc(100vh - Npx)` because
+ * the header height varies with the logo size + QR size + padding —
+ * picking the wrong N (we used to pick 89, the actual value is closer
+ * to 141) cuts off the bottom of the queue.
+ */
+.player-root {
+  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #0a0a0a 0%, #131313 100%);
+  overflow: hidden;
+}
+
+/*
+ * Header bar: brand logo on the left, "Scan to join" URL + QR code on
+ * the right. Sits above .player-grid; flex:0 0 auto means it takes
+ * its natural height and the grid below absorbs the remainder.
+ */
+.player-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+
+  /*
+   * Flat opaque background. We previously used `backdrop-filter:
+   * blur(8px)` which looked nice but is a per-frame GPU pass that
+   * shares the renderer process with the Spotify Web Playback SDK
+   * worker; on weaker hardware this caused audio glitches/buffer
+   * underruns whenever the player re-painted (every progress tick).
+   */
+  background: var(--bg-2);
+}
+
+.player-logo { height: 95px; width: auto; display: block; }
+.player-join { display: flex; align-items: center; gap: 16px; }
+.player-join-text { text-align: right; }
+.player-join-label {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+/* Match the green of the logo so the brand color reads as one unit. */
+.player-join-url {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--accent);
+  word-break: break-all;
+  max-width: 360px;
+  margin-top: 2px;
+}
+.player-qr {
+  background: #fff;
+  padding: 6px;
+  border-radius: 8px;
+  /* zero-out the inline-block whitespace under the QR's <svg>. */
+  line-height: 0;
+}
+
+/*
+ * Grid below the header. `flex: 1 1 auto` + `min-height: 0` is the magic
+ * combo that lets the children own their own scrollbars (via
+ * overflow:auto) instead of expanding the grid past the viewport. Without
+ * `min-height: 0` the grid would clamp to its content height and we'd
+ * be back to a page-level scroll that cuts off the queue.
+ */
+.player-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+  padding: 32px;
+}
+
+.player-now {
+  /* min-height:0 so a long title/artist line never pushes the side
+     panel out of bounds. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
 .player-art { width: 360px; height: 360px; max-width: 60vmin; max-height: 60vmin; border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); object-fit: cover; }
 .player-title { font-size: 32px; font-weight: 800; margin-top: 24px; }
 .player-sub { font-size: 18px; color: var(--fg-2); margin-top: 8px; }
-.player-side { padding: 16px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px; overflow: auto; }
+.player-side {
+  /* Same min-height:0 + overflow:auto pattern: this column scrolls
+     internally so the queue's last item is always reachable. */
+  min-height: 0;
+  padding: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+}
 .player-side h3 { margin: 0 0 12px; }
+
+@media (max-width: 800px) {
+  /* On mobile we want the page to scroll naturally instead of locking
+     to viewport height — vertical real estate is the constraint, not
+     the layout. */
+  .player-root { height: auto; overflow: visible; }
+  .player-header { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 16px; }
+  .player-join { justify-content: space-between; }
+  .player-join-text { text-align: left; }
+  .player-grid { grid-template-columns: 1fr; padding: 16px; }
+  .player-side { overflow: visible; }
+}
+
+
+
+/*
+ * Activity ticker — fixed-height footer at the bottom of .player-root.
+ *
+ * Each event is its own absolutely-positioned <.ticker-item> running a
+ * one-shot CSS animation from off-right to off-left. The component
+ * unmounts the node on `animationend`, so there's exactly one DOM
+ * node per visible event (no duplication, no stale entries). The
+ * scheduler in ActivityTicker.tsx hands every item a `--ticker-delay`
+ * computed to keep a constant px/sec spacing between consecutive
+ * items, so a burst of votes doesn't pile up — they march across in
+ * a line.
+ *
+ * We animate `transform` only (composites on the GPU) so the strip
+ * doesn't compete with the Spotify Web Playback SDK's audio worker.
+ */
+.ticker {
+  flex: 0 0 auto;
+  height: 56px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+  overflow: hidden;
+  position: relative;
+}
+
+.ticker-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 16px;
+  /* Start fully off-screen to the right; the keyframe slides it
+     across to fully off-screen on the left. `100vw` keeps the entry
+     edge anchored to the visible viewport regardless of how wide the
+     parent is. */
+  transform: translateX(100vw);
+  animation-name: tickerItemSlide;
+  animation-duration: var(--ticker-dur, 12s);
+  animation-delay: var(--ticker-delay, 0ms);
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  animation-iteration-count: 1;
+  will-change: transform;
+}
+@keyframes tickerItemSlide {
+  from { transform: translateX(100vw); }
+  to   { transform: translateX(-100%); }
+}
+/* Pause on hover so a passer-by can read a mid-flight event. */
+.ticker:hover .ticker-item,
+.ticker:focus-within .ticker-item { animation-play-state: paused; }
+
+.ticker-name { color: var(--fg); margin-right: 2px; font-weight: 600; }
+.ticker-verb { color: var(--fg-2); }
+.ticker-track-info { color: var(--fg); }
+.ticker-track-title { color: var(--fg); }
+.ticker-dim { color: var(--fg-3); }
+
+/* Idle (house) messages — slightly muted + accented glyph so the eye
+   reads them as different from real user actions. */
+.ticker-item-idle { color: var(--fg-2); }
+.ticker-text-idle { font-style: italic; color: var(--fg); }
+.ticker-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  filter: saturate(1.2);
+}
+
+.ticker-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--bg-3);
+}
+.ticker-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  font-size: 14px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+@media (max-width: 700px) {
+  .ticker { height: 48px; }
+  .ticker-avatar { width: 28px; height: 28px; }
+  .ticker-item { padding: 0 10px; gap: 8px; font-size: 13px; }
+}
+

@@ -237,10 +237,33 @@ export default function Dashboard({ account, setAccount }: { account: AdminAccou
                 </div>
                 <div className="votes">{it.netVotes >= 0 ? `+${it.netVotes}` : it.netVotes}</div>
                 <div className="actions">
-                  <button className={`btn btn-sm ${it.myVote === 1 ? 'btn-primary' : ''}`} onClick={() => vote(it.id, 1)} disabled={it.locked}>▲</button>
-                  <button className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`} onClick={() => vote(it.id, -1)} disabled={it.locked}>▼</button>
+                  {/*
+                    Backend rejects self-votes ("You cannot vote on your
+                    own song.") so we replace the up/down arrows with a
+                    "Your song" tag for the song's author. Admin still
+                    keeps the ✕ remove button — they manage the queue.
+                  */}
+                  {it.addedBy.kind === 'admin' && it.addedBy.id === account.id ? (
+                    <span className="tag mute">Your song</span>
+                  ) : (
+                    <>
+                      <button
+                        className={`btn btn-sm ${it.myVote === 1 ? 'btn-primary' : ''}`}
+                        onClick={() => vote(it.id, 1)}
+                        disabled={it.locked}
+                        aria-pressed={it.myVote === 1}
+                      >▲</button>
+                      <button
+                        className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
+                        onClick={() => vote(it.id, -1)}
+                        disabled={it.locked}
+                        aria-pressed={it.myVote === -1}
+                      >▼</button>
+                    </>
+                  )}
                   <button className="btn btn-sm" onClick={() => removeItem(it.id)}>✕</button>
                 </div>
+
               </div>
             ))}
           </div>
