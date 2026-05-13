@@ -4,6 +4,9 @@ import { Session } from '../models/Session';
 import { Admin } from '../models/Admin';
 import { User } from '../models/User';
 import { SessionParticipant } from '../models/SessionParticipant';
+import { QueueItem } from '../models/QueueItem';
+import { PlayedSong } from '../models/PlayedSong';
+
 import { AuthedRequest, requireUser, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { badRequest, forbidden, notFound } from '../utils/errors';
@@ -42,7 +45,224 @@ router.get('/me/stats', requireUser, async (req: AuthedRequest, res, next) => {
 });
 
 /**
+ * List the sessions the current user has joined (i.e. has a
+ * SessionParticipant row for). Drives the "Sessions you've joined"
+ * card on the user profile page.
+ *
+ * Returned rows include the session slug + a friendly admin label
+ * (`businessName ?? name`) so the UI can link straight back into
+ * `/${slug}` and the user knows whose room it is. `active` is
+ * surfaced too — a session might be one the user joined last week
+ * that the admin has since shut down, and we want that visible.
+ *
+ * Sessions whose admin or session document has been deleted are
+ * skipped silently (orphaned participant rows shouldn't 500 the
+ * profile page).
+ */
+router.get('/me/sessions', requireUser, async (req: AuthedRequest, res, next) => {
+  try {
+    const userId = req.user!._id;
+    // Pull participants newest-first so the user's most recent joins
+    // float to the top of the list. We populate the session itself
+    // (for slug + active + adminId) in a single round-trip.
+    const participants = await SessionParticipant.find({ userId })
+      .sort({ lastSeenAt: -1 })
+      .populate<{ sessionId: { _id: any; slug: string; active: boolean; adminId: any } }>(
+        'sessionId',
+        'slug active adminId',
+      )
+      .lean();
+
+    // Batch-fetch the admin labels in one query rather than per-row.
+    // (We still tolerate populate returning null when a session was
+    // deleted out from under a participant.)
+    const adminIds = Array.from(
+      new Set(
+        participants
+          .map((p) => (p.sessionId as any)?.adminId)
+          .filter(Boolean)
+          .map((id: any) => String(id)),
+      ),
+    );
+    const admins = await Admin.find({ _id: { $in: adminIds } })
+      .select('name businessName')
+      .lean();
+    const adminLabelById = new Map<string, string>();
+    for (const a of admins) {
+      adminLabelById.set(String(a._id), a.businessName || a.name || 'Host');
+    }
+
+    const items = participants
+      .map((p) => {
+        const s = p.sessionId as any;
+        if (!s || !s.slug) return null; // session deleted — skip
+        return {
+          slug: s.slug as string,
+          active: !!s.active,
+          adminLabel: adminLabelById.get(String(s.adminId)) || 'Host',
+          joinedAt: p.joinedAt,
+          lastSeenAt: p.lastSeenAt,
+          blocked: !!p.blocked,
+        };
+      })
+      .filter(Boolean);
+
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Per-session karma + leaderboard for the calling user. Drives the
+ * "Stats for this session" popup on the user profile page.
+ *
+ * Per-session stats aren't stored on `User` (those are global) — we
+ * derive them on demand from `QueueItem` (currently queued) and
+ * `PlayedSong` (already played) which are both indexed by
+ * sessionId. That's a single small read per collection plus an
+ * in-memory aggregation; the popup is rare-traffic so it's fine.
+ *
+ * Karma formula (per session):
+ *   sessionKarma = sum(netVotes on user's currently-queued items)
+ *                + 1 per played song the user added
+ *
+ * The "+1 per play" piece mirrors the global karma formula but
+ * approximates the played-song vote contribution, since we don't
+ * snapshot final netVotes onto PlayedSong rows. Documented on the
+ * client so users understand the number.
+ *
+ * Leaderboard returns the top 10 by sessionKarma, ties broken by
+ * songsPlayed desc then songsAdded desc. If the calling user falls
+ * outside the top 10, their own row is appended so they always see
+ * their rank.
+ */
+router.get('/sessions/:slug/me-stats', requireUser, async (req: AuthedRequest, res, next) => {
+  try {
+    const slug = req.params.slug.toLowerCase();
+    const session = await Session.findOne({ slug });
+    if (!session) throw notFound('Session not found');
+    const admin = await Admin.findById(session.adminId).select('name businessName').lean();
+    const adminLabel = admin?.businessName || admin?.name || 'Host';
+
+    // Pull queue + played in parallel. Both filtered to user-added
+    // rows since admin/recommended additions don't have a userId we
+    // can attribute karma to.
+    const [queueRows, playedRows] = await Promise.all([
+      QueueItem.find({ sessionId: session._id, 'addedBy.kind': 'user' })
+        .select('addedBy.id netVotes')
+        .lean(),
+      PlayedSong.find({ sessionId: session._id, 'addedBy.kind': 'user' })
+        .select('addedBy.id')
+        .lean(),
+    ]);
+
+    // Aggregate per-user. Map userId(string) -> stats accumulator.
+    type Row = { userId: string; songsAdded: number; songsPlayed: number; sessionKarma: number };
+    const byUser = new Map<string, Row>();
+    const ensure = (id: string): Row => {
+      let r = byUser.get(id);
+      if (!r) {
+        r = { userId: id, songsAdded: 0, songsPlayed: 0, sessionKarma: 0 };
+        byUser.set(id, r);
+      }
+      return r;
+    };
+
+    for (const q of queueRows) {
+      const id = q.addedBy?.id ? String(q.addedBy.id) : null;
+      if (!id) continue;
+      const r = ensure(id);
+      r.songsAdded += 1;
+      r.sessionKarma += Number(q.netVotes || 0);
+    }
+    for (const p of playedRows) {
+      const id = p.addedBy?.id ? String(p.addedBy.id) : null;
+      if (!id) continue;
+      const r = ensure(id);
+      r.songsAdded += 1;
+      r.songsPlayed += 1;
+      // Played songs contribute +1 karma each (mirrors global formula).
+      r.sessionKarma += 1;
+    }
+
+    // Resolve usernames in one batched query.
+    const userIds = Array.from(byUser.keys());
+    const users = userIds.length
+      ? await User.find({ _id: { $in: userIds } }).select('username').lean()
+      : [];
+    const usernameById = new Map<string, string>();
+    for (const u of users) usernameById.set(String(u._id), (u as any).username || 'user');
+
+    // Sort: karma desc, played desc, added desc, then userId for stability.
+    const sorted = Array.from(byUser.values()).sort((a, b) => {
+      if (b.sessionKarma !== a.sessionKarma) return b.sessionKarma - a.sessionKarma;
+      if (b.songsPlayed !== a.songsPlayed) return b.songsPlayed - a.songsPlayed;
+      if (b.songsAdded !== a.songsAdded) return b.songsAdded - a.songsAdded;
+      return a.userId.localeCompare(b.userId);
+    });
+
+    const meId = String(req.user!._id);
+    // 1-indexed rank lookup. `null` if the user has no participation
+    // (i.e. joined the session but never added a song).
+    let myRank: number | null = null;
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].userId === meId) {
+        myRank = i + 1;
+        break;
+      }
+    }
+    const myRow = sorted.find((r) => r.userId === meId) ?? {
+      userId: meId,
+      songsAdded: 0,
+      songsPlayed: 0,
+      sessionKarma: 0,
+    };
+
+    const top = sorted.slice(0, 10).map((r, i) => ({
+      rank: i + 1,
+      username: usernameById.get(r.userId) || 'user',
+      songsAdded: r.songsAdded,
+      songsPlayed: r.songsPlayed,
+      sessionKarma: r.sessionKarma,
+      isMe: r.userId === meId,
+    }));
+
+    // If user isn't in the top 10 *but* they have a rank (i.e. they
+    // do appear somewhere in `sorted`), append their row so the popup
+    // can show "… #47" without rendering the entire list.
+    if (myRank !== null && myRank > 10) {
+      top.push({
+        rank: myRank,
+        username: usernameById.get(meId) || req.user!.username,
+        songsAdded: myRow.songsAdded,
+        songsPlayed: myRow.songsPlayed,
+        sessionKarma: myRow.sessionKarma,
+        isMe: true,
+      });
+    }
+
+    res.json({
+      slug,
+      adminLabel,
+      me: {
+        songsAdded: myRow.songsAdded,
+        songsPlayed: myRow.songsPlayed,
+        sessionKarma: myRow.sessionKarma,
+        rank: myRank,
+        total: sorted.length,
+      },
+      leaderboard: top,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
+/**
  * Search Spotify. If the user has linked their own Spotify, use their token
+
  * so personalised results show up; otherwise fall back to the host admin's
  * token (looked up via the session slug). This means search works even for
  * users who haven't linked Spotify, while linked users see what they're used

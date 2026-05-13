@@ -154,6 +154,10 @@ This is the main page users will be interacting with, most use will come from mo
 This is a popup that is shown when users click an "Activity" button. This button/popup should only be enabled if either songs per hour or votes per hour threshold is set by the admin for the session.
 This popup shows the amount of songs/votes the user has remaining for the hour. A countdown clock is also shown counting down until the user will receive more songs/votes (only show the clock if the user has 0 songs or votes remaining). The clock for songs and votes should be synced.
 
+#### User Profile Page
+This page shows user settings as well as a list of sessions the user has joined.
+This session list shows the users karma stats and ranking for each session when clicked.
+
 ### Player
 This is what will be displayed on a central TV for everyone to see. This will also handle audio output using the Spotify Web Playback API.
 

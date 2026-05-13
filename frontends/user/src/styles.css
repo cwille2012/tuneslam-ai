@@ -35,8 +35,17 @@ button { font-family: inherit; }
 input, select, textarea {
   width: 100%; padding: 10px 12px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--bg-3); color: var(--fg);
-  font-size: 14px;
+  /*
+    16px is the magic number on iOS Safari: anything smaller and the
+    browser auto-zooms the viewport when the field gets focus, then
+    leaves the page zoomed for the rest of the visit. Bumping to 16px
+    here (instead of disabling pinch-zoom on the meta-viewport, which
+    breaks accessibility) is what stops the "click + → snap-zoom into
+    the search box" behaviour on phones.
+  */
+  font-size: 16px;
 }
+
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 label { font-size: 13px; color: var(--fg-2); display: block; margin-bottom: 4px; }
 
@@ -114,3 +123,57 @@ th { color: var(--fg-2); font-weight: 600; }
   z-index: 100;
   font-size: 14px;
 }
+
+/* Floating Action Button — fixed bottom-right while on a session view.
+   Sits above the modal backdrop only because the backdrop is z-index 200
+   (so when the modal opens the FAB visually disappears under it, which
+   is fine — the modal has its own close button). */
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent, #1db954);
+  color: #000;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 90;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.fab:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,.55); }
+.fab:active { transform: translateY(0); }
+
+/* Modal backdrop + card. Used by ConfirmDialog AND the Add Song modal,
+   so the styles are intentionally generic. `.modal-wide` stretches the
+   card for the song-picker UX (lots of list rows). */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+}
+.modal {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.modal-wide { max-width: 640px; }
+/* The list inside the modal scrolls *within* the modal, not the page,
+   so the tabs + search bar stay pinned at the top of the dialog. */
+.modal .modal-list { max-height: 60vh; overflow-y: auto; }

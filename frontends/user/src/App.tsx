@@ -10,6 +10,8 @@ import FacebookCallback from './pages/FacebookCallback';
 import SpotifyCallback from './pages/SpotifyCallback';
 import { QuotaProvider } from './lib/quota';
 import ActivityButton from './components/ActivityButton';
+import ConfirmDialog from './components/ConfirmDialog';
+
 
 
 export interface LinkedProviderProfile {
@@ -33,6 +35,7 @@ export interface UserAccount {
 export default function App() {
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
   const nav = useNavigate();
 
   useEffect(() => {
@@ -55,17 +58,23 @@ export default function App() {
         <span className="spacer" />
         {account ? (
           <>
-            <NavLink to="/account">@{account.username}</NavLink>
             {/*
-              Activity button — sits to the left of Logout, styled the
-              same (`btn btn-sm`). Self-hides when the current route
-              isn't a session view, or when the session has neither
-              song nor vote per-hour limits configured.
+              Nav button order: Activity → @username → Logout. The
+              username link is styled as `btn btn-sm` (same as the
+              other two) per request; `NavLink` still applies its
+              `active` class so visited-state styling keeps working.
             */}
             <ActivityButton />
-            <button className="btn btn-sm" onClick={logout}>Logout</button>
+            <NavLink to="/account" className="btn btn-sm">@{account.username}</NavLink>
+            <button
+              className="btn btn-sm"
+              onClick={() => setConfirmingLogout(true)}
+            >
+              Logout
+            </button>
           </>
         ) : (
+
           <>
             <NavLink to="/login">Login</NavLink>
             <NavLink to="/register">Sign up</NavLink>
@@ -82,8 +91,21 @@ export default function App() {
         <Route path="/spotify/callback" element={<SpotifyCallback onAuth={setAccount} />} />
         <Route path="/:slug" element={<SessionView account={account} setAccount={setAccount} />} />
       </Routes>
+      <ConfirmDialog
+        open={confirmingLogout}
+        title="Log out?"
+        message="You'll be signed out of TuneSlam on this device."
+        confirmLabel="Log out"
+        variant="danger"
+        onConfirm={() => {
+          setConfirmingLogout(false);
+          logout();
+        }}
+        onCancel={() => setConfirmingLogout(false)}
+      />
     </div>
     </QuotaProvider>
   );
 }
+
 

@@ -3,7 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { SOCKET_EVENTS } from '@tuneslam/shared';
 import { api, errMsg, makeSocket, getToken } from '../lib/api';
 import { useQuota } from '../lib/quota';
+import { writePendingSession, clearPendingSession } from '../lib/pendingSession';
 import type { UserAccount } from '../App';
+
 
 
 type AddTab = 'search' | 'library' | 'playlists';
@@ -29,6 +31,11 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
   // error) so the Activity popover reflects the new count without
   // waiting on the 30s background poll.
   const { refresh: refreshQuota } = useQuota();
+  // The "Add a song" UI now lives in a modal opened via a fixed
+  // bottom-right FAB, instead of being permanently embedded below the
+  // queue. Keeps the queue itself the focus of the page on mobile.
+  const [addSongOpen, setAddSongOpen] = useState(false);
+
 
   // Wall-clock timestamp at which we received the current `nowPlaying`
   // snapshot. Used to extrapolate the progress bar smoothly between the
@@ -40,6 +47,21 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
   useEffect(() => {
     api.get(`/api/sessions/${slug}/exists`).then((r) => setExists(r.data.exists)).catch(() => setExists(false));
   }, [slug]);
+
+  // Persist the slug as the "pending session" whenever a logged-out
+  // user lands on a real session URL (typically via QR scan). Login /
+  // Register / FacebookCallback all read this as a fallback so the
+  // user is bounced back to the right place after authenticating —
+  // even across full-page reloads or OAuth round-trips that drop
+  // React-Router state.
+  //
+  // Once the user is logged in, clear it: stale entries shouldn't
+  // outlive the authenticated session that consumed them.
+  useEffect(() => {
+    if (exists && !account) writePendingSession(`/${slug}`);
+    if (account) clearPendingSession();
+  }, [exists, !!account, slug]);
+
 
   async function refresh() {
     try {
@@ -132,6 +154,10 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
     try {
       await api.post(`/api/user/sessions/${slug}/queue`, { trackId });
       setSearch(''); setResults([]);
+      // Successful add → close the modal so the user sees their song
+      // pop into the queue immediately. We don't close on error so
+      // the user can read the rate-limit / blacklist message.
+      setAddSongOpen(false);
     } catch (e: any) {
       setErr(errMsg(e));
     } finally {
@@ -142,6 +168,7 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
       refreshQuota();
     }
   }
+
 
 
   async function openPlaylistTracks(p: any) {
@@ -258,87 +285,171 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
         ))}
       </div>
 
-      <h2 style={{ margin: '16px 0 4px' }}>Add a song</h2>
-      <div className="tabs">
-        {(['search', 'library', 'playlists'] as const).map((t) => (
-          <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); setOpenPlaylist(null); }}>{t}</div>
-        ))}
-      </div>
+      {/*
+        Floating Action Button (FAB). Always visible while the user is
+        on a session view; opens the Add Song modal. Sits in the
+        bottom-right via fixed positioning so it tracks the viewport,
+        not the page scroll.
+      */}
+      <button
+        className="fab"
+        onClick={() => setAddSongOpen(true)}
+        aria-label="Add a song"
+        title="Add a song"
+      >
+        +
+      </button>
 
-      {tab === 'search' && (
-        <>
-          <form onSubmit={doSearch} className="row">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Spotify…" />
-            <button className="btn btn-primary" disabled={busy}>{busy ? '…' : 'Search'}</button>
-          </form>
-          <div className="list">
-            {results.map((t) => (
-              <div key={t.id} className="queue-item">
-                <img src={t.albumArt || ''} alt="" />
-                <div className="info"><div className="title">{t.name}</div><div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div></div>
-                <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'library' && (
-        !account.spotifyLinked ? (
-          <div className="card col">
-            <div className="mute">Link your Spotify to add songs from your saved library.</div>
-            <button className="btn btn-primary" onClick={linkSpotify}>Link Spotify</button>
-          </div>
-        ) : (
-          <div className="list">
-            {library.length === 0 && <div className="mute">Loading your library…</div>}
-            {library.map((t) => (
-              <div key={t.id} className="queue-item">
-                <img src={t.albumArt || ''} alt="" />
-                <div className="info"><div className="title">{t.name}</div><div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div></div>
-                <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
-              </div>
-            ))}
-          </div>
-        )
-      )}
-
-      {tab === 'playlists' && (
-        !account.spotifyLinked ? (
-          <div className="card col">
-            <div className="mute">Link your Spotify to add songs from your playlists.</div>
-            <button className="btn btn-primary" onClick={linkSpotify}>Link Spotify</button>
-          </div>
-        ) : openPlaylist ? (
-          <div className="col">
-            <div className="row" style={{ alignItems: 'center', gap: 8 }}>
-              <button className="btn btn-sm" onClick={() => { setOpenPlaylist(null); setPlaylistTracks([]); }}>← Playlists</button>
-              <div style={{ fontWeight: 600 }}>{openPlaylist.name}</div>
+      {addSongOpen && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAddSongOpen(false);
+          }}
+          role="presentation"
+        >
+          <div
+            className="modal modal-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add a song"
+          >
+            <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <h2 style={{ margin: 0 }}>Add a song</h2>
+              <button
+                className="btn btn-sm"
+                onClick={() => setAddSongOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
-            <div className="list">
-              {playlistTracks.length === 0 && <div className="mute">Loading…</div>}
-              {playlistTracks.map((t) => (
-                <div key={t.id} className="queue-item">
-                  <img src={t.albumArt || ''} alt="" />
-                  <div className="info"><div className="title">{t.name}</div><div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div></div>
-                  <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
+            <div className="tabs">
+              {(['search', 'library', 'playlists'] as const).map((t) => (
+                <div
+                  key={t}
+                  className={`tab ${tab === t ? 'active' : ''}`}
+                  onClick={() => { setTab(t); setOpenPlaylist(null); }}
+                >
+                  {t}
                 </div>
               ))}
             </div>
+
+            {tab === 'search' && (
+              <>
+                <form onSubmit={doSearch} className="row">
+                  {/*
+                    No `autoFocus` here on purpose: on iOS Safari,
+                    auto-focusing a text input pops the keyboard and
+                    re-anchors the layout, which feels like a "snap
+                    zoom" when the modal opens. Users can tap the
+                    field themselves; the +16px font-size on inputs
+                    (in styles.css) keeps that tap from triggering
+                    the iOS focus-zoom either.
+                  */}
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search Spotify…"
+                  />
+
+                  <button className="btn btn-primary" disabled={busy}>{busy ? '…' : 'Search'}</button>
+                </form>
+                <div className="list modal-list">
+                  {results.map((t) => (
+                    <div key={t.id} className="queue-item">
+                      <img src={t.albumArt || ''} alt="" />
+                      <div className="info">
+                        <div className="title">{t.name}</div>
+                        <div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div>
+                      </div>
+                      <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {tab === 'library' && (
+              !account.spotifyLinked ? (
+                <div className="card col">
+                  <div className="mute">Link your Spotify to add songs from your saved library.</div>
+                  <button className="btn btn-primary" onClick={linkSpotify}>Link Spotify</button>
+                </div>
+              ) : (
+                <div className="list modal-list">
+                  {library.length === 0 && <div className="mute">Loading your library…</div>}
+                  {library.map((t) => (
+                    <div key={t.id} className="queue-item">
+                      <img src={t.albumArt || ''} alt="" />
+                      <div className="info">
+                        <div className="title">{t.name}</div>
+                        <div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div>
+                      </div>
+                      <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {tab === 'playlists' && (
+              !account.spotifyLinked ? (
+                <div className="card col">
+                  <div className="mute">Link your Spotify to add songs from your playlists.</div>
+                  <button className="btn btn-primary" onClick={linkSpotify}>Link Spotify</button>
+                </div>
+              ) : openPlaylist ? (
+                <div className="col">
+                  <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => { setOpenPlaylist(null); setPlaylistTracks([]); }}
+                    >
+                      ← Playlists
+                    </button>
+                    <div style={{ fontWeight: 600 }}>{openPlaylist.name}</div>
+                  </div>
+                  <div className="list modal-list">
+                    {playlistTracks.length === 0 && <div className="mute">Loading…</div>}
+                    {playlistTracks.map((t) => (
+                      <div key={t.id} className="queue-item">
+                        <img src={t.albumArt || ''} alt="" />
+                        <div className="info">
+                          <div className="title">{t.name}</div>
+                          <div className="sub">{t.artists.map((a: any) => a.name).join(', ')}</div>
+                        </div>
+                        <button className="btn btn-sm btn-primary" onClick={() => add(t.id)}>Add</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="list modal-list">
+                  {playlists.length === 0 && <div className="mute">Loading your playlists…</div>}
+                  {playlists.map((p) => (
+                    <div
+                      key={p.id}
+                      className="queue-item"
+                      onClick={() => openPlaylistTracks(p)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <img src={p.image || ''} alt="" />
+                      <div className="info">
+                        <div className="title">{p.name}</div>
+                        <div className="sub">{p.tracks} tracks</div>
+                      </div>
+                      <div className="mute">›</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
           </div>
-        ) : (
-          <div className="list">
-            {playlists.length === 0 && <div className="mute">Loading your playlists…</div>}
-            {playlists.map((p) => (
-              <div key={p.id} className="queue-item" onClick={() => openPlaylistTracks(p)} style={{ cursor: 'pointer' }}>
-                <img src={p.image || ''} alt="" />
-                <div className="info"><div className="title">{p.name}</div><div className="sub">{p.tracks} tracks</div></div>
-                <div className="mute">›</div>
-              </div>
-            ))}
-          </div>
-        )
+        </div>
       )}
     </div>
   );
 }
+

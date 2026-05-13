@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, setToken, errMsg } from '../lib/api';
+import { readPendingSession, clearPendingSession } from '../lib/pendingSession';
 import type { UserAccount } from '../App';
 
 export default function Register({ onAuth }: { onAuth: (a: UserAccount) => void }) {
@@ -9,9 +10,9 @@ export default function Register({ onAuth }: { onAuth: (a: UserAccount) => void 
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
-  // Preserve the page the user came from (typically the session join URL)
-  // so they land back there after sign-up instead of the generic /account.
-  const back = (loc.state as any)?.from || '/account';
+  // Mirrors Login.tsx — see comment there. Falls back through
+  // router-state → localStorage → /account.
+  const back = (loc.state as any)?.from || readPendingSession() || '/account';
   const set = (k: string) => (e: any) => setForm({ ...form, [k]: e.target.value });
 
   async function submit(e: any) {
@@ -20,9 +21,11 @@ export default function Register({ onAuth }: { onAuth: (a: UserAccount) => void 
       const r = await api.post('/api/auth/user/register', form);
       setToken(r.data.token);
       onAuth(r.data.account);
+      clearPendingSession();
       nav(back);
     } catch (e: any) { setErr(errMsg(e)); } finally { setBusy(false); }
   }
+
   return (
     <div className="center">
       <form className="card col" onSubmit={submit}>

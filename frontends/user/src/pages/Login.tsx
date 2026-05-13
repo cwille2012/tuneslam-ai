@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, setToken, errMsg, API_BASE } from '../lib/api';
+import { readPendingSession, clearPendingSession } from '../lib/pendingSession';
 import type { UserAccount } from '../App';
 
 export default function Login({ onAuth }: { onAuth: (a: UserAccount) => void }) {
@@ -10,7 +11,13 @@ export default function Login({ onAuth }: { onAuth: (a: UserAccount) => void }) 
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
-  const back = (loc.state as any)?.from || '/account';
+  // Resolution order, most specific to least:
+  //   1. React-Router `state.from` — set when the user clicks "Log in"
+  //      from the SessionView prompt (works for the same-tab happy path).
+  //   2. localStorage `pendingSession` — set the moment a logged-out
+  //      user views any session. Survives full reloads / OAuth round-trips.
+  //   3. /account — generic landing for "Log in" from the top nav.
+  const back = (loc.state as any)?.from || readPendingSession() || '/account';
 
   async function submit(e: any) {
     e.preventDefault();
@@ -19,9 +26,14 @@ export default function Login({ onAuth }: { onAuth: (a: UserAccount) => void }) 
       const r = await api.post('/api/auth/user/login', { identifier, password });
       setToken(r.data.token);
       onAuth(r.data.account);
+      // Clear the breadcrumb now that we've consumed it. We do this
+      // even if `back === '/account'` — stale entries shouldn't be
+      // sticky across logins.
+      clearPendingSession();
       nav(back);
     } catch (e: any) { setErr(errMsg(e)); } finally { setBusy(false); }
   }
+
 
   function facebookLogin() {
     // Forward the redirect target through the OAuth round-trip so the user
