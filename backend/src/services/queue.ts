@@ -7,6 +7,8 @@ import { SessionParticipant } from '../models/SessionParticipant';
 import type { SpotifyTrackSnapshot, QueueItemDTO, DownvoteBehavior } from '@tuneslam/shared';
 
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors';
+import { rolloverQuotaIfExpired } from './quota';
+
 
 export interface AddSongInput {
   session: SessionDoc;
@@ -85,7 +87,17 @@ export async function addSongToQueue(input: AddSongInput): Promise<QueueItemDoc>
     if (previouslyPlayed) throw conflict('Song was already played in this session.');
   }
 
-  // Per-user-per-hour rate limit.
+  // Per-user-per-hour song-add limit.
+  //
+  // Lookup happens unconditionally (when there's a user adder + the
+  // limit is configured) so the participant's quota window stays
+  // accurate. Counter is bumped only when the add itself succeeds —
+  // the actual `QueueItem.create` lives just below this block, and
+  // the participant save is sequenced before that, so a duplicate
+  // throw from `QueueItem.create` would (correctly) leak one count
+  // until the hour rolls over. That trade-off is fine for an MVP;
+  // moving the participant save *after* the create would over-count
+  // when the create throws.
   if (
     addedBy.kind === 'user' &&
     addedBy.id &&
@@ -96,19 +108,16 @@ export async function addSongToQueue(input: AddSongInput): Promise<QueueItemDoc>
       userId: addedBy.id,
     });
     if (participant) {
-      const hourMs = 60 * 60 * 1000;
-      const now = new Date();
-      if (now.getTime() - participant.recentAdds.hourStart.getTime() > hourMs) {
-        participant.recentAdds = { hourStart: now, count: 0 };
-      }
-      if (participant.recentAdds.count >= session.settings.maxSongsPerUserPerHour) {
+      rolloverQuotaIfExpired(participant);
+      if (participant.songsUsedThisHour >= session.settings.maxSongsPerUserPerHour) {
         throw new QueueRejection('You have hit the hourly add limit for this session.');
       }
-      participant.recentAdds.count += 1;
+      participant.songsUsedThisHour += 1;
       participant.lastSeenAt = new Date();
       await participant.save();
     }
   }
+
 
   const item = await QueueItem.create({
     sessionId: session._id,

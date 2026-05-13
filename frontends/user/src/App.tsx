@@ -8,6 +8,9 @@ import Account from './pages/Account';
 import SessionView from './pages/SessionView';
 import FacebookCallback from './pages/FacebookCallback';
 import SpotifyCallback from './pages/SpotifyCallback';
+import { QuotaProvider } from './lib/quota';
+import ActivityButton from './components/ActivityButton';
+
 
 export interface LinkedProviderProfile {
   name?: string;
@@ -45,6 +48,7 @@ export default function App() {
   if (loading) return <div className="center"><div className="mute">Loading…</div></div>;
 
   return (
+    <QuotaProvider loggedIn={!!account}>
     <div className="app">
       <nav className="nav">
         <NavLink to="/" className="brand">TuneSlam</NavLink>
@@ -52,6 +56,13 @@ export default function App() {
         {account ? (
           <>
             <NavLink to="/account">@{account.username}</NavLink>
+            {/*
+              Activity button — sits to the left of Logout, styled the
+              same (`btn btn-sm`). Self-hides when the current route
+              isn't a session view, or when the session has neither
+              song nor vote per-hour limits configured.
+            */}
+            <ActivityButton />
             <button className="btn btn-sm" onClick={logout}>Logout</button>
           </>
         ) : (
@@ -62,6 +73,7 @@ export default function App() {
         )}
       </nav>
       <Routes>
+
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={account ? <Navigate to="/account" replace /> : <Login onAuth={setAccount} />} />
         <Route path="/register" element={account ? <Navigate to="/account" replace /> : <Register onAuth={setAccount} />} />
@@ -71,5 +83,7 @@ export default function App() {
         <Route path="/:slug" element={<SessionView account={account} setAccount={setAccount} />} />
       </Routes>
     </div>
+    </QuotaProvider>
   );
 }
+

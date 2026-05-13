@@ -88,6 +88,11 @@ const SessionSchema = new Schema<SessionDoc>(
         type: Number,
         default: DEFAULT_SESSION_SETTINGS.maxSongsPerUserPerHour,
       },
+      maxVotesPerUserPerHour: {
+        type: Number,
+        default: DEFAULT_SESSION_SETTINGS.maxVotesPerUserPerHour,
+      },
+
       downvoteThreshold: { type: Number, default: DEFAULT_SESSION_SETTINGS.downvoteThreshold },
       downvoteBehavior: {
         type: String,

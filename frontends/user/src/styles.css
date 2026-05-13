@@ -96,3 +96,21 @@ label { font-size: 13px; color: var(--fg-2); display: block; margin-bottom: 4px;
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
 th { color: var(--fg-2); font-weight: 600; }
+
+/* Activity button popover — anchored to the .activity-wrap container in
+   the global nav. Sits below the button, right-aligned so it doesn't
+   overflow the viewport on narrow screens. */
+.activity-wrap { position: relative; }
+.activity-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  font-size: 14px;
+}

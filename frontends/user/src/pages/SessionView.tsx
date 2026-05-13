@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { SOCKET_EVENTS } from '@tuneslam/shared';
 import { api, errMsg, makeSocket, getToken } from '../lib/api';
+import { useQuota } from '../lib/quota';
 import type { UserAccount } from '../App';
+
 
 type AddTab = 'search' | 'library' | 'playlists';
 
@@ -23,6 +25,11 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
   const [playlistTracks, setPlaylistTracks] = useState<any[]>([]);
   const socketRef = useRef<any>(null);
   const [, setTick] = useState(0);
+  // Quota refresher — call after any add/vote (success OR rate-limit
+  // error) so the Activity popover reflects the new count without
+  // waiting on the 30s background poll.
+  const { refresh: refreshQuota } = useQuota();
+
   // Wall-clock timestamp at which we received the current `nowPlaying`
   // snapshot. Used to extrapolate the progress bar smoothly between the
   // (sparse) socket updates without double-counting elapsed time.
@@ -125,8 +132,17 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
     try {
       await api.post(`/api/user/sessions/${slug}/queue`, { trackId });
       setSearch(''); setResults([]);
-    } catch (e: any) { setErr(errMsg(e)); }
+    } catch (e: any) {
+      setErr(errMsg(e));
+    } finally {
+      // Refresh either way: a successful add bumps `songsUsedThisHour`,
+      // and a rate-limit-rejection (the only "expected" error) does
+      // not change quota — but other races (e.g. just-rolled-over
+      // window) might. Cheap call.
+      refreshQuota();
+    }
   }
+
 
   async function openPlaylistTracks(p: any) {
     setOpenPlaylist(p);
@@ -145,9 +161,18 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
   }
 
   async function vote(itemId: string, pressed: 1 | -1) {
-    try { await api.post(`/api/user/sessions/${slug}/queue/${itemId}/vote`, { pressed }); }
-    catch (e: any) { setErr(errMsg(e)); }
+    try {
+      await api.post(`/api/user/sessions/${slug}/queue/${itemId}/vote`, { pressed });
+    } catch (e: any) {
+      setErr(errMsg(e));
+    } finally {
+      // See add() — same reasoning. The vote endpoint bumps
+      // `votesUsedThisHour` on success, and we want the popover to
+      // reflect that immediately.
+      refreshQuota();
+    }
   }
+
 
   const computedProgressMs = (() => {
     if (!nowPlaying?.track) return 0;

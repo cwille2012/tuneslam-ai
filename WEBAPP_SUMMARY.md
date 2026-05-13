@@ -100,6 +100,9 @@ Options:
 2. No downvotes. This disables all downvoting and only allows users to upvote songs. The downvote option should be hidden and blocked in the backend.
 3. Downvotes don't affect order. When this option is selected song downvotes do not show in the queue (only positive votes count towards the total vote count) but the downvote threshold is still in effect. If the song meets the downvote threshold it is removed from the queue.
 
+Note for voting limits:
+Counting policy: every successful press counts as 1 (whether it's a new vote, a flip, or a cancel). Matches "one tap = one use", and prevents the toggle-spam-to-cheat case.
+
 ### User
 The user view is for users to join and interact with a queue. Note that users will be primarily using mobile devices. Users are not required to link Spotify, song search and playback will all be handled using the admins Spotify account. An account is required for all users.
 
@@ -139,6 +142,17 @@ Keep track of the following information for each user (admin included). A user c
 - [x] Karma (number of upvotes their songs have received minus number of downvotes they have received. Add one for each played song.)
 - [x] Last login
 - [x] Sessions joined
+
+#### User Main Page
+This is the main page users will be interacting with, most use will come from mobile devices.
+
+##### Queue
+
+##### Add Song
+
+##### Activity
+This is a popup that is shown when users click an "Activity" button. This button/popup should only be enabled if either songs per hour or votes per hour threshold is set by the admin for the session.
+This popup shows the amount of songs/votes the user has remaining for the hour. A countdown clock is also shown counting down until the user will receive more songs/votes (only show the clock if the user has 0 songs or votes remaining). The clock for songs and votes should be synced.
 
 ### Player
 This is what will be displayed on a central TV for everyone to see. This will also handle audio output using the Spotify Web Playback API.

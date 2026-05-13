@@ -7,8 +7,25 @@ export interface SessionParticipantDoc extends Document {
   blocked: boolean;
   joinedAt: Date;
   lastSeenAt: Date;
-  /** Cached count of how many songs this user has added to this session this hour. */
-  recentAdds: { hourStart: Date; count: number };
+  /**
+   * Per-hour quota tracking. `quotaHourStart` is shared by both the
+   * songs and votes counters so they reset together — by spec the
+   * two limits "should be synced (both reset at the same time)".
+   *
+   * `songsUsedThisHour` counts successful song adds (not rejections).
+   * `votesUsedThisHour` counts successful vote presses (new vote,
+   * flip, or cancel — every press that the server actually applied).
+   *
+   * Both fields are bumped only when the corresponding limit is
+   * non-zero (i.e. enabled), but they're tracked unconditionally so
+   * we don't need to migrate state when the admin toggles a limit on.
+   *
+   * Use {@link rolloverQuotaIfExpired} from `services/quota.ts` to
+   * reset these once the hour has elapsed.
+   */
+  quotaHourStart: Date;
+  songsUsedThisHour: number;
+  votesUsedThisHour: number;
 }
 
 const SessionParticipantSchema = new Schema<SessionParticipantDoc>(
@@ -18,12 +35,19 @@ const SessionParticipantSchema = new Schema<SessionParticipantDoc>(
     blocked: { type: Boolean, default: false },
     joinedAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
-    recentAdds: {
-      hourStart: { type: Date, default: () => new Date() },
-      count: { type: Number, default: 0 },
-    },
+    quotaHourStart: { type: Date, default: () => new Date() },
+    songsUsedThisHour: { type: Number, default: 0 },
+    votesUsedThisHour: { type: Number, default: 0 },
   },
-  { timestamps: false },
+  {
+    timestamps: false,
+    // Tolerate legacy docs that still have `recentAdds: { hourStart, count }`
+    // from an earlier schema. We don't read it; the new fields default
+    // to "fresh hour" on first read so the user gets the configured
+    // quota immediately. Existing data is left in place; it will fall
+    // off naturally as participants are recreated.
+    strict: false,
+  },
 );
 
 SessionParticipantSchema.index({ sessionId: 1, userId: 1 }, { unique: true });

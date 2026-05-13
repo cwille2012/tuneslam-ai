@@ -30,7 +30,17 @@ export const DEFAULT_SESSION_SETTINGS = {
   autofillGenre: '' as string,
   autofillMin: 3,
   maxSongsPerUserPerHour: 0,
+  /**
+   * Per-user-per-hour vote limit. 0 = unlimited. Mirrors
+   * `maxSongsPerUserPerHour`. Counts every successful vote press
+   * (new vote, flip, or cancel) as 1 — admin votes are not affected
+   * since admins don't have a SessionParticipant doc. The hour
+   * window is shared with the songs counter, so they reset together
+   * for any given user.
+   */
+  maxVotesPerUserPerHour: 0,
   downvoteThreshold: 3,
+
   downvoteBehavior: 'standard' as DownvoteBehavior,
   allowReadd: false,
 };

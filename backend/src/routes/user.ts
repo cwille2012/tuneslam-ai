@@ -26,8 +26,10 @@ import {
 } from '../services/spotify';
 import { broadcastQueue, broadcastActivity } from '../services/realtime';
 import { actorFromUser, buildActivityEvent } from '../services/activity';
+import { rolloverQuotaIfExpired, quotaResetsAt } from '../services/quota';
 
 import { applySongAddedStats, applyVoteStats } from '../services/stats';
+
 
 const router = Router();
 
@@ -222,12 +224,35 @@ router.post(
         userId: user._id,
       });
       if (participant?.blocked) throw forbidden('You are blocked from voting in this session.');
+
+      // Per-user-per-hour vote limit. Counts every successful press
+      // (new vote, flip, OR cancel) as 1 — matches the song-add
+      // counter semantic and prevents toggle-spam from cheating the
+      // rate limit. Admins are not limited (no participant doc).
+      //
+      // We bump the counter *before* `castVote` runs so that if the
+      // call below throws (e.g. self-vote) the user isn't charged.
+      // The check itself uses `>=` so the very next press above the
+      // limit is rejected; the bump only happens after the limit
+      // check passes.
+      const maxVotes = session.settings.maxVotesPerUserPerHour ?? 0;
+      if (maxVotes > 0 && participant) {
+        rolloverQuotaIfExpired(participant);
+        if (participant.votesUsedThisHour >= maxVotes) {
+          throw forbidden('You have hit the hourly vote limit for this session.');
+        }
+        participant.votesUsedThisHour += 1;
+        participant.lastSeenAt = new Date();
+        await participant.save();
+      }
+
       const outcome = await castVote({
         session,
         itemId: req.params.itemId,
         voter: { kind: 'user', id: user._id.toString() },
         pressed: req.body.pressed,
       });
+
       if (outcome.item) {
         await applyVoteStats({
           voterKind: 'user',
@@ -269,4 +294,56 @@ router.post(
   },
 );
 
+/**
+ * Quota snapshot for the calling user in a particular session.
+ *
+ * Returns 0/0 for any limit the admin has disabled (the client uses a
+ * positive `maxXxxPerHour` to decide whether to render that line of
+ * the popup). `resetsAt` is sent regardless because the client only
+ * surfaces the countdown when at least one limit is exhausted, and
+ * computing it client-side from `quotaHourStart` would require
+ * exposing that field too.
+ *
+ * Cheap and called on a 30 s timer from the user app — keep it lean.
+ */
+router.get('/sessions/:slug/quota', requireUser, async (req: AuthedRequest, res, next) => {
+  try {
+    const session = await Session.findOne({ slug: req.params.slug.toLowerCase() });
+    if (!session) throw notFound('Session not found');
+    const user = req.user!;
+    let participant = await SessionParticipant.findOne({
+      sessionId: session._id,
+      userId: user._id,
+    });
+    if (!participant) {
+      // First-time call (e.g. user just opened the popup before
+      // touching the queue) — create the doc so subsequent calls
+      // reuse the same `quotaHourStart`. Mirrors the upsert in
+      // GET /sessions/:slug.
+      participant = await SessionParticipant.create({
+        sessionId: session._id,
+        userId: user._id,
+      });
+    } else {
+      // Roll the window over before reporting, so a user who hasn't
+      // hit anything for over an hour sees a fresh quota when they
+      // open the popup — not stale numbers that "reset" only on the
+      // next add/vote.
+      if (rolloverQuotaIfExpired(participant)) {
+        await participant.save();
+      }
+    }
+    res.json({
+      maxSongsPerHour: session.settings.maxSongsPerUserPerHour ?? 0,
+      maxVotesPerHour: session.settings.maxVotesPerUserPerHour ?? 0,
+      songsUsedThisHour: participant.songsUsedThisHour ?? 0,
+      votesUsedThisHour: participant.votesUsedThisHour ?? 0,
+      resetsAt: quotaResetsAt(participant).toISOString(),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;
+

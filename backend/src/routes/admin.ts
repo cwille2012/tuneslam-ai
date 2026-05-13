@@ -117,7 +117,9 @@ const settingsSchema = z.object({
   autofillGenre: z.string().optional(),
   autofillMin: z.number().int().min(0).max(20).optional(),
   maxSongsPerUserPerHour: z.number().int().min(0).optional(),
+  maxVotesPerUserPerHour: z.number().int().min(0).optional(),
   downvoteThreshold: z.number().int().min(0).optional(),
+
   downvoteBehavior: z.enum(DOWNVOTE_BEHAVIORS).optional(),
   allowReadd: z.boolean().optional(),
 });

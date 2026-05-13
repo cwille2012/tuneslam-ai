@@ -55,6 +55,20 @@ export default function Settings() {
         <input type="number" min={0} value={settings.maxSongsPerUserPerHour} onChange={(e) => set('maxSongsPerUserPerHour', Number(e.target.value))} />
         <div className="mute">0 = unlimited.</div>
       </div>
+      <div><label>Max votes per user per hour</label>
+        <input
+          type="number"
+          min={0}
+          value={settings.maxVotesPerUserPerHour ?? 0}
+          onChange={(e) => set('maxVotesPerUserPerHour', Number(e.target.value))}
+        />
+        <div className="mute">
+          0 = unlimited. Counts every successful vote press (new vote,
+          flip, or cancel). Resets at the same time as the song-add
+          counter, per user.
+        </div>
+      </div>
+
       <div><label>Allow re-add of recently played</label>
         <select value={String(settings.allowReadd)} onChange={(e) => set('allowReadd', e.target.value === 'true')}>
           <option value="false">No</option><option value="true">Yes</option>
