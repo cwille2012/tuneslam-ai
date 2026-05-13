@@ -206,14 +206,27 @@ export default function SessionView({ account, setAccount }: { account: UserAcco
                     disabled={it.locked}
                     aria-pressed={it.myVote === 1}
                   >▲</button>
-                  <button
-                    className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
-                    onClick={() => vote(it.id, -1)}
-                    disabled={it.locked}
-                    aria-pressed={it.myVote === -1}
-                  >▼</button>
+                  {/*
+                    Hide the downvote arrow entirely when this session
+                    has `downvoteBehavior === 'disabled'`. The backend
+                    also 403s the request in that mode (defense in
+                    depth) — this just stops us from rendering a
+                    button that can't do anything. `noEffectOnOrder`
+                    keeps the button: the vote still affects the
+                    threshold, only the displayed queue order is
+                    masked.
+                  */}
+                  {session?.settings?.downvoteBehavior !== 'disabled' && (
+                    <button
+                      className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
+                      onClick={() => vote(it.id, -1)}
+                      disabled={it.locked}
+                      aria-pressed={it.myVote === -1}
+                    >▼</button>
+                  )}
                 </>
               )}
+
             </div>
 
           </div>

@@ -83,9 +83,22 @@ The admin dashboard is for the owner/creator of the queue/session (think bar man
 - [x] Lock-ahead song duration
 - [x] Auto-fill options (when queue length is 0 how should it be filled)
 - [x] Auto-fill minimum (minimum songs that can be in the queue, default 3)
-- [x] Max songs a user can add per hour (default 0 no maximum)
+- [x] Max songs a user can add per hour (default 0 no maximum, does not apply to admin)
+- [x] Max votes a user can cast per hour (default 0 no maximum, does not apply to admin)
 - [x] Downvote threshold (songs with x downvotes will be removed, default 3)
 - [x] Allow removed songs to be re-added (default false)
+- [x] Downvote Behavior
+
+##### Auto Fill Options and Behavior
+Add autofill options and behavior here
+
+##### Downvote Behavior Options and Behavior
+This dropdown affects the way the queue behaves with regard to downvotes from users and admin.
+Note that these settings only affect the users/admin in the current session. Other sessions can have different downvote behavior.
+Options:
+1. Standard. This is the default option and the queue operates as described in this document.
+2. No downvotes. This disables all downvoting and only allows users to upvote songs. The downvote option should be hidden and blocked in the backend.
+3. Downvotes don't affect order. When this option is selected song downvotes do not show in the queue (only positive votes count towards the total vote count) but the downvote threshold is still in effect. If the song meets the downvote threshold it is removed from the queue.
 
 ### User
 The user view is for users to join and interact with a queue. Note that users will be primarily using mobile devices. Users are not required to link Spotify, song search and playback will all be handled using the admins Spotify account. An account is required for all users.
@@ -149,6 +162,7 @@ This is what will be displayed on a central TV for everyone to see. This will al
 - [x] Vote counts display
 - [x] Real-time synchronization
 - [x] Inactive session message
+- [x] Scrolling ticker showing user interactions
 
 #### Spotify Web Playback API
 The queue will be played by the Spotify Web Playback API. When the player is open (and the admin has hit play) the number one song in the queue should be played and moved to now playing (when this song moves to the now playing section it shopuld be removed from the queue and the number two song advances to the number one spot). As the number one song finishes, use the lock-ahead duration in admin settings to "lock" the next song. When the current song has less than the lock-ahead duration remaining, the next song should be "locked" in the queue so that even if a song below it is up-voted it no longer takes the place of the next up song. The Spotify Web Playback API should play that locked song next. That song should be removed from the queue and added to now playing and this process repeats. Once the current track reaches 50% progress, it should be marked as played. If playback is paused, closed, or restarted after that point, the song should not return to the queue.

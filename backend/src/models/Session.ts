@@ -1,9 +1,11 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import {
   DEFAULT_SESSION_SETTINGS,
+  DOWNVOTE_BEHAVIORS,
   SessionSettings,
   SpotifyTrackSnapshot,
 } from '@tuneslam/shared';
+
 import type { AddedByKind } from './QueueItem';
 
 export interface NowPlayingState {
@@ -87,7 +89,13 @@ const SessionSchema = new Schema<SessionDoc>(
         default: DEFAULT_SESSION_SETTINGS.maxSongsPerUserPerHour,
       },
       downvoteThreshold: { type: Number, default: DEFAULT_SESSION_SETTINGS.downvoteThreshold },
+      downvoteBehavior: {
+        type: String,
+        enum: DOWNVOTE_BEHAVIORS,
+        default: DEFAULT_SESSION_SETTINGS.downvoteBehavior,
+      },
       allowReadd: { type: Boolean, default: DEFAULT_SESSION_SETTINGS.allowReadd },
+
     },
     nowPlaying: {
       track: { type: TrackSnapshotSchema, default: null },

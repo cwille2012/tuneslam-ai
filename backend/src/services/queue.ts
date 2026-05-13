@@ -4,7 +4,8 @@ import { QueueItem, QueueItemDoc, voterKey } from '../models/QueueItem';
 import { PlayedSong } from '../models/PlayedSong';
 import { BlacklistedTrack } from '../models/BlacklistedTrack';
 import { SessionParticipant } from '../models/SessionParticipant';
-import type { SpotifyTrackSnapshot, QueueItemDTO } from '@tuneslam/shared';
+import type { SpotifyTrackSnapshot, QueueItemDTO, DownvoteBehavior } from '@tuneslam/shared';
+
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors';
 
 export interface AddSongInput {
@@ -146,11 +147,23 @@ export interface VoteOutcome {
 
 export async function castVote(input: VoteInput): Promise<VoteOutcome> {
   const { session, itemId, voter, pressed } = input;
+
+  // Defense in depth: even if a stale or malicious client renders a
+  // downvote button, refuse to record it when the session has
+  // disabled downvotes. The admin Settings page UI also hides the
+  // button so this is rarely hit in practice.
+  const behavior: DownvoteBehavior =
+    (session.settings.downvoteBehavior as DownvoteBehavior | undefined) ?? 'standard';
+  if (pressed === -1 && behavior === 'disabled') {
+    throw forbidden('Downvotes are disabled in this session.');
+  }
+
   const item = await QueueItem.findOne({ _id: itemId, sessionId: session._id });
   if (!item) throw notFound('Queue item not found');
   if (item.addedBy.id && item.addedBy.id.toString() === voter.id && item.addedBy.kind === voter.kind) {
     throw forbidden('You cannot vote on your own song.');
   }
+
 
   const key = voterKey(voter.kind, voter.id);
   const previous = (item.votes.get(key) ?? 0) as -1 | 0 | 1;
@@ -192,19 +205,44 @@ export async function castVote(input: VoteInput): Promise<VoteOutcome> {
   return { item, removed: false, myVote: next, previousVote: previous };
 }
 
-/** Returns the queue ordered as it should play. */
-export async function getOrderedQueue(sessionId: mongoose.Types.ObjectId): Promise<QueueItemDoc[]> {
-  // Locked first (only one expected), then by netVotes desc, then by addedAt asc.
-  const items = await QueueItem.find({ sessionId }).sort({
-    locked: -1,
-    netVotes: -1,
-    addedAt: 1,
-  });
-  return items;
+/**
+ * Read the session's downvote behavior, falling back to `'standard'`
+ * for sessions persisted before this field existed (defensive — the
+ * mongoose default also takes care of new writes).
+ */
+function downvoteBehaviorOf(session: SessionDoc): DownvoteBehavior {
+  return (session.settings.downvoteBehavior as DownvoteBehavior | undefined) ?? 'standard';
+}
+
+/**
+ * Returns the queue ordered as it should play.
+ *
+ * Sort key depends on the session's `downvoteBehavior`:
+ *   - `standard` / `disabled`: locked-first → netVotes desc → addedAt asc.
+ *     (`disabled` happens to behave like `standard` because there
+ *     simply can't be any downvotes; same sort is fine.)
+ *   - `noEffectOnOrder`: locked-first → upvotes desc → addedAt asc.
+ *     Downvotes are recorded server-side (so the threshold removal in
+ *     `castVote` still works) but they don't influence position.
+ */
+export async function getOrderedQueue(session: SessionDoc): Promise<QueueItemDoc[]> {
+  const behavior = downvoteBehaviorOf(session);
+  const sort: Record<string, 1 | -1> =
+    behavior === 'noEffectOnOrder'
+      ? { locked: -1, upvotes: -1, addedAt: 1 }
+      : { locked: -1, netVotes: -1, addedAt: 1 };
+  return QueueItem.find({ sessionId: session._id }).sort(sort);
 }
 
 export interface SerialiseOpts {
   voter?: { kind: 'admin' | 'user'; id: string } | null;
+  /**
+   * The session's downvote behavior. Threaded in so {@link serializeItem}
+   * can mask `downvotes` / recompute the displayed `netVotes` when the
+   * admin chose `noEffectOnOrder`. Falls back to `'standard'` if not
+   * provided (older callers).
+   */
+  downvoteBehavior?: DownvoteBehavior;
 }
 
 export function serializeItem(item: QueueItemDoc, opts: SerialiseOpts = {}): QueueItemDTO {
@@ -213,6 +251,16 @@ export function serializeItem(item: QueueItemDoc, opts: SerialiseOpts = {}): Que
     const v = item.votes.get(voterKey(opts.voter.kind, opts.voter.id));
     if (v === 1 || v === -1) myVote = v;
   }
+  // For `noEffectOnOrder`, hide downvotes from the wire format. The
+  // displayed `netVotes` becomes "upvotes only" so clients can render
+  // a consistent total without revealing downvote counts. The
+  // server-side `item.downvotes` is still maintained — that's what
+  // the threshold-removal logic operates on.
+  const behavior = opts.downvoteBehavior ?? 'standard';
+  const display =
+    behavior === 'noEffectOnOrder'
+      ? { netVotes: item.upvotes, downvotes: 0 }
+      : { netVotes: item.netVotes, downvotes: item.downvotes };
   return {
     id: item._id.toString(),
     track: item.track,
@@ -221,9 +269,9 @@ export function serializeItem(item: QueueItemDoc, opts: SerialiseOpts = {}): Que
       id: item.addedBy.id ? item.addedBy.id.toString() : null,
       label: item.addedBy.label,
     },
-    netVotes: item.netVotes,
+    netVotes: display.netVotes,
     upvotes: item.upvotes,
-    downvotes: item.downvotes,
+    downvotes: display.downvotes,
     myVote,
     locked: item.locked,
     addedAt: item.addedAt.toISOString(),
@@ -231,12 +279,17 @@ export function serializeItem(item: QueueItemDoc, opts: SerialiseOpts = {}): Que
 }
 
 export async function serializeQueue(
-  sessionId: mongoose.Types.ObjectId,
+  session: SessionDoc,
   opts: SerialiseOpts = {},
 ): Promise<QueueItemDTO[]> {
-  const items = await getOrderedQueue(sessionId);
-  return items.map((i) => serializeItem(i, opts));
+  const items = await getOrderedQueue(session);
+  const merged: SerialiseOpts = {
+    ...opts,
+    downvoteBehavior: opts.downvoteBehavior ?? downvoteBehaviorOf(session),
+  };
+  return items.map((i) => serializeItem(i, merged));
 }
+
 
 /** Removes the song. Used by admin "remove from queue". */
 export async function removeQueueItem(
@@ -300,11 +353,12 @@ export async function advanceQueue(session: SessionDoc): Promise<AdvanceQueueRes
     nextItem = await QueueItem.findById(session.lockedNextQueueItemId);
   }
   if (!nextItem) {
-    const ordered = await getOrderedQueue(session._id);
+    const ordered = await getOrderedQueue(session);
     nextItem = ordered[0] ?? null;
   }
 
   // Archive the *previous* now-playing if it was credited as played.
+
   // We work off the snapshot stored on the session — the underlying
   // QueueItem doc was deleted when this track was promoted.
   let played: AdvanceQueueResult['played'];
@@ -377,8 +431,9 @@ export async function lockNextIfNeeded(session: SessionDoc): Promise<QueueItemDo
   if (session.lockedNextQueueItemId) {
     return QueueItem.findById(session.lockedNextQueueItemId);
   }
-  const ordered = await getOrderedQueue(session._id);
+  const ordered = await getOrderedQueue(session);
   const next = ordered[0];
+
   if (!next) return null;
   next.locked = true;
   await next.save();

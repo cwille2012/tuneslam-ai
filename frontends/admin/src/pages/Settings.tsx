@@ -55,15 +55,50 @@ export default function Settings() {
         <input type="number" min={0} value={settings.maxSongsPerUserPerHour} onChange={(e) => set('maxSongsPerUserPerHour', Number(e.target.value))} />
         <div className="mute">0 = unlimited.</div>
       </div>
-      <div><label>Downvote threshold (skip when ≤)</label>
-        <input type="number" min={0} value={settings.downvoteThreshold} onChange={(e) => set('downvoteThreshold', Number(e.target.value))} />
-        <div className="mute">Negative number, e.g. -5 means a song with 5 net downvotes gets skipped. 0 = disabled.</div>
-      </div>
       <div><label>Allow re-add of recently played</label>
         <select value={String(settings.allowReadd)} onChange={(e) => set('allowReadd', e.target.value === 'true')}>
           <option value="false">No</option><option value="true">Yes</option>
         </select>
       </div>
+
+      <h2 style={{ marginTop: 12 }}>Downvotes</h2>
+      <div>
+        <label>Downvote behavior</label>
+        <select
+          value={settings.downvoteBehavior ?? 'standard'}
+          onChange={(e) => set('downvoteBehavior', e.target.value)}
+        >
+          <option value="standard">Standard</option>
+          <option value="disabled">No downvotes</option>
+          <option value="noEffectOnOrder">Downvotes don't affect order</option>
+        </select>
+        <div className="mute">
+          <strong>Standard</strong> — downvotes count toward queue order
+          and the downvote threshold.<br />
+          <strong>No downvotes</strong> — hides the downvote button for
+          users and admins; only upvotes are allowed.<br />
+          <strong>Downvotes don't affect order</strong> — downvotes are
+          hidden from the queue display, but still trigger removal once
+          the downvote threshold is met.
+        </div>
+      </div>
+      <div>
+        <label>Downvote threshold (skip when ≤)</label>
+        <input
+          type="number"
+          min={0}
+          value={settings.downvoteThreshold}
+          disabled={settings.downvoteBehavior === 'disabled'}
+          onChange={(e) => set('downvoteThreshold', Number(e.target.value))}
+        />
+        <div className="mute">
+          A song with this many net downvotes gets removed. 0 = disabled.
+          {settings.downvoteBehavior === 'disabled' && (
+            <> Ignored while downvotes are disabled.</>
+          )}
+        </div>
+      </div>
+
 
       <h2 style={{ marginTop: 12 }}>Autofill</h2>
       <div><label>Mode</label>

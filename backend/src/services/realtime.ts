@@ -102,12 +102,18 @@ export function initRealtime(httpServer: HttpServer): IoServer {
       // own up/down arrows render in their pressed state on (re)join —
       // a refresh otherwise resets every button to the unpressed state.
       try {
-        const ordered = await getOrderedQueue(session._id);
+        const ordered = await getOrderedQueue(session);
         const voter = voterFromSocket(s);
-        const items = ordered.map((it) => serializeItem(it, { voter }));
+        // Pass the session through so `serializeItem` can mask
+        // downvotes when the admin selected `noEffectOnOrder`.
+        const downvoteBehavior = session.settings.downvoteBehavior ?? 'standard';
+        const items = ordered.map((it) =>
+          serializeItem(it, { voter, downvoteBehavior }),
+        );
         s.emit(SOCKET_EVENTS.queueUpdate, { items });
         s.emit(SOCKET_EVENTS.nowPlayingUpdate, nowPlayingDTO(session));
       } catch (err) {
+
         logger.warn({ err }, 'failed to send initial session snapshot');
       }
 
@@ -173,7 +179,11 @@ export async function broadcastQueue(session: SessionDoc): Promise<void> {
   // their own votes. Otherwise the anonymous snapshot would clear every
   // up/down arrow's "pressed" state on every queue mutation. We do a
   // single DB read and re-serialize per socket from the in-memory docs.
-  const ordered = await getOrderedQueue(session._id);
+  const ordered = await getOrderedQueue(session);
+  // Pull the per-session downvote behavior once and thread it into
+  // every serialize call so clients see the right `netVotes`/
+  // `downvotes` (masked to upvotes-only when `noEffectOnOrder`).
+  const downvoteBehavior = session.settings.downvoteBehavior ?? 'standard';
   let anonItems: QueueItemDTO[] | null = null;
 
   for (const sid of sids) {
@@ -182,13 +192,16 @@ export async function broadcastQueue(session: SessionDoc): Promise<void> {
     const voter = voterFromSocket(sock);
     if (voter) {
       sock.emit(SOCKET_EVENTS.queueUpdate, {
-        items: ordered.map((it) => serializeItem(it, { voter })),
+        items: ordered.map((it) => serializeItem(it, { voter, downvoteBehavior })),
       });
     } else {
-      if (!anonItems) anonItems = ordered.map((it) => serializeItem(it));
+      if (!anonItems) {
+        anonItems = ordered.map((it) => serializeItem(it, { downvoteBehavior }));
+      }
       sock.emit(SOCKET_EVENTS.queueUpdate, { items: anonItems });
     }
   }
+
 }
 
 

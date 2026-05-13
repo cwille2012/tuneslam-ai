@@ -10,7 +10,13 @@ import { SessionParticipant } from '../models/SessionParticipant';
 import { AuthedRequest, requireAdmin } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors';
-import { validateSlug, normalizeSlug, DEFAULT_SESSION_SETTINGS } from '@tuneslam/shared';
+import {
+  validateSlug,
+  normalizeSlug,
+  DEFAULT_SESSION_SETTINGS,
+  DOWNVOTE_BEHAVIORS,
+} from '@tuneslam/shared';
+
 import {
   addSongToQueue,
   castVote,
@@ -112,8 +118,10 @@ const settingsSchema = z.object({
   autofillMin: z.number().int().min(0).max(20).optional(),
   maxSongsPerUserPerHour: z.number().int().min(0).optional(),
   downvoteThreshold: z.number().int().min(0).optional(),
+  downvoteBehavior: z.enum(DOWNVOTE_BEHAVIORS).optional(),
   allowReadd: z.boolean().optional(),
 });
+
 
 router.patch('/session/settings', validate(settingsSchema), async (req: AuthedRequest, res, next) => {
   try {
@@ -153,9 +161,10 @@ router.get('/session/queue', async (req: AuthedRequest, res, next) => {
   try {
     const session = await Session.findOne({ adminId: req.admin!._id });
     if (!session) throw notFound('Session not found');
-    const items = await serializeQueue(session._id, {
+    const items = await serializeQueue(session, {
       voter: { kind: 'admin', id: req.admin!._id.toString() },
     });
+
     res.json({ items, nowPlaying: nowPlayingDTO(session) });
   } catch (e) {
     next(e);

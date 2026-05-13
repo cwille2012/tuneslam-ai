@@ -141,7 +141,8 @@ router.get('/sessions/:slug/queue', optionalAuth, async (req: AuthedRequest, res
     const session = await Session.findOne({ slug: req.params.slug.toLowerCase() });
     if (!session) throw notFound('Session not found');
     const voter = req.user ? { kind: 'user' as const, id: req.user._id.toString() } : null;
-    const items = await serializeQueue(session._id, { voter });
+    const items = await serializeQueue(session, { voter });
+
     res.json({ items, nowPlaying: nowPlayingDTO(session) });
   } catch (e) {
     next(e);

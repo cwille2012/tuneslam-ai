@@ -253,14 +253,27 @@ export default function Dashboard({ account, setAccount }: { account: AdminAccou
                         disabled={it.locked}
                         aria-pressed={it.myVote === 1}
                       >▲</button>
-                      <button
-                        className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
-                        onClick={() => vote(it.id, -1)}
-                        disabled={it.locked}
-                        aria-pressed={it.myVote === -1}
-                      >▼</button>
+                      {/*
+                        Hide the downvote button when the session was
+                        configured "No downvotes". Backend also 403s
+                        downvote attempts in that mode (defense in
+                        depth), but we don't want to render a button
+                        the user can't use. `noEffectOnOrder` keeps
+                        the button — votes still affect the threshold
+                        even though the visible queue order ignores
+                        them.
+                      */}
+                      {session.settings?.downvoteBehavior !== 'disabled' && (
+                        <button
+                          className={`btn btn-sm ${it.myVote === -1 ? 'btn-danger' : ''}`}
+                          onClick={() => vote(it.id, -1)}
+                          disabled={it.locked}
+                          aria-pressed={it.myVote === -1}
+                        >▼</button>
+                      )}
                     </>
                   )}
+
                   <button className="btn btn-sm" onClick={() => removeItem(it.id)}>✕</button>
                 </div>
 
