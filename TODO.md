@@ -22,6 +22,8 @@ Increase karma leaderboard show time
 
 Developer dashboard (developer.tuneslam.com)
 
+Confirmation button for stop session
+
 Need to check that Karma is consistant everywhere
 Note for karma calculation on user profile page session list:
 I'm not preserving vote-derived karma for already-played songs (would need a `netVotesAtPlay` field on `PlayedSong`). The leaderboard uses queue-net-votes + plays instead. Worth a follow-up if you want bulletproof karma history later.

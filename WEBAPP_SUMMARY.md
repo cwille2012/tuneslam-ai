@@ -391,5 +391,31 @@ Local dev is wired to `192.168.0.4`: backend on `:4000`, admin `:5173`, user `:5
 
 Before running locally, fill in `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` (and optional Facebook creds) in `backend/.env.development`, ensure MongoDB is running, then `npm install && npm run dev`.
 
+
+
+
+# Notes
+
 To kill running app if it becomes separated:
 sudo fuser -k 4000/tcp 5173/tcp 5174/tcp 5175/tcp
+
+Needed for spotify player in Chrome:
+--unsafely-treat-insecure-origin-as-secure=<player base url here>
+
+To build each frontend and put in dist (run from /tuneslam-ai$):
+(Builds use .env.production in each folder, they must all match)
+npm ci && npm --workspace shared run build && npm --workspace @tuneslam/admin run build
+npm ci && npm --workspace shared run build && npm --workspace @tuneslam/user run build
+npm ci && npm --workspace shared run build && npm --workspace @tuneslam/player run build
+
+wrangler login (only needed on first deploy, different command needed for headless)
+
+wrangler pages deploy frontends/admin/dist  --project-name=admin  --branch=main
+wrangler pages deploy frontends/user/dist   --project-name=user   --branch=main
+wrangler pages deploy frontends/player/dist --project-name=player --branch=main
+
+Note:
+After the first deploy: Open the Cloudflare dashboard → Pages → `player` → __Custom domains__ and bind `player.tuneslam.com` (DNS records auto-create if `tuneslam.com` is on your Cloudflare account).
+
+Note:
+The frontends will fail until the backend (API) is up at `api.tuneslam.com` and its `CORS_ORIGINS` includes all three frontend origins. The backend itself is __not__ deployed to Cloudflare Pages — it goes to AWS Elastic Beanstalk (`deploy/beanstalk/`). Cloudflare proxies `api.tuneslam.com` (orange-cloud) to the Beanstalk URL via a CNAME. WebSockets work through the orange-cloud by default.
