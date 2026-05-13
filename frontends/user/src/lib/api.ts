@@ -3,6 +3,12 @@ import { io, Socket } from 'socket.io-client';
 
 export const API_BASE = (import.meta as any).env.VITE_API_BASE_URL as string;
 export const USER_URL = (import.meta as any).env.VITE_USER_URL as string;
+// Admin frontend URL — used by the landing page to send venue owners
+// to the admin signup/login flow without forcing them through the
+// user app first. Configured per-environment in
+// .env.{development,production}.
+export const ADMIN_URL = ((import.meta as any).env.VITE_ADMIN_URL as string) || '';
+
 
 const TOKEN_KEY = 'tuneslam.userToken';
 

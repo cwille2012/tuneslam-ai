@@ -177,3 +177,171 @@ th { color: var(--fg-2); font-weight: 600; }
 /* The list inside the modal scrolls *within* the modal, not the page,
    so the tabs + search bar stay pinned at the top of the dialog. */
 .modal .modal-list { max-height: 60vh; overflow-y: auto; }
+
+/* ===================================================================
+ * Landing page (frontends/user/src/pages/Landing.tsx)
+ *
+ * Wide-but-bounded container, two-up paths section that auto-collapses
+ * to one column on narrow viewports. Reuses .btn / .mute / etc. so
+ * the visual language stays consistent with the rest of the user app.
+ * ================================================================ */
+
+.landing {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* Hero — soft accent-coloured radial wash so it reads as marketing,
+ * not just another card. Centered text, generous vertical padding,
+ * primary + secondary CTAs that wrap on narrow phones. */
+.landing-hero {
+  text-align: center;
+  padding: 64px 20px 56px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(29, 185, 84, 0.18), transparent 60%),
+    radial-gradient(circle at 80% 80%, rgba(29, 185, 84, 0.08), transparent 55%),
+    var(--bg-2);
+  border: 1px solid var(--border);
+}
+.landing-brand {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.landing-headline {
+  margin: 0;
+  font-size: clamp(28px, 6vw, 48px);
+  line-height: 1.1;
+  font-weight: 800;
+}
+.landing-sub {
+  max-width: 620px;
+  margin: 18px auto 28px;
+  font-size: clamp(15px, 2.4vw, 18px);
+  line-height: 1.55;
+  color: var(--fg-2);
+}
+.landing-cta-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.landing-cta {
+  /* Slightly larger than default .btn for "marketing" presence. */
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* "How it works" — three feature cards. auto-fit + minmax means the
+ * row collapses to one column at <~600px without a media query. */
+.landing-section-title {
+  text-align: center;
+  margin: 0 0 20px;
+  font-size: clamp(20px, 3vw, 24px);
+}
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.landing-feature {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.landing-feature h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+.landing-feature p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.landing-feature-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+/* Two outcome cards — listener vs. host. Same auto-fit trick so the
+ * layout flows from side-by-side on desktop to stacked on mobile.
+ * The host card gets a faint accent border to draw the eye since
+ * that's the side with a real CTA (the listener card's primary
+ * action is currently disabled). */
+.landing-paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+.landing-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* A little extra room above CTAs / footer line. */
+  align-items: flex-start;
+}
+.landing-card h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.landing-card p {
+  margin: 0;
+  line-height: 1.55;
+}
+.landing-card-accent {
+  border-color: rgba(29, 185, 84, 0.45);
+  box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.12);
+}
+.landing-cta-caption {
+  font-size: 12px;
+  margin-top: -4px;
+}
+.landing-card-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 13px;
+}
+
+/* Tiny footer at the bottom of the page. */
+.landing-footer {
+  text-align: center;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* iOS-Safari quirk: html/body have a black background but at the very
+ * top of a long landing page the address-bar collapse can briefly show
+ * the gradient against the OS chrome. Scope the bleed by giving the
+ * page a tiny safe-area inset on iOS. Harmless elsewhere. */
+@supports (padding: env(safe-area-inset-top)) {
+  .landing { padding-top: max(32px, env(safe-area-inset-top)); }
+}
