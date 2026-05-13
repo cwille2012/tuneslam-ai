@@ -181,12 +181,16 @@ This is what will be displayed on a central TV for everyone to see. This will al
 - [x] Real-time synchronization
 - [x] Inactive session message
 - [x] Scrolling ticker showing user interactions
+- [x] Karma leaderboard
 
 #### Spotify Web Playback API
 The queue will be played by the Spotify Web Playback API. When the player is open (and the admin has hit play) the number one song in the queue should be played and moved to now playing (when this song moves to the now playing section it shopuld be removed from the queue and the number two song advances to the number one spot). As the number one song finishes, use the lock-ahead duration in admin settings to "lock" the next song. When the current song has less than the lock-ahead duration remaining, the next song should be "locked" in the queue so that even if a song below it is up-voted it no longer takes the place of the next up song. The Spotify Web Playback API should play that locked song next. That song should be removed from the queue and added to now playing and this process repeats. Once the current track reaches 50% progress, it should be marked as played. If playback is paused, closed, or restarted after that point, the song should not return to the queue.
 
 #### Other Player Notes
 If the player is closed the queue should be immediatley paused. If a player becomes de-authenticated the queue shoud be paused. If a new player is opened, the admin should be alerted and asked if they wish to transfer playback to the new player (only one player at a time per admin). An admin opening the player from their dashboard should be automatically authenticated, however an admin navigating to the player url (player.tuneslam.com/session-same) should be prompted to login.
+
+#### Karma Leaderboard
+This section should take over the queue with a nice transition (same size and same place as queue, rotates in). This should display for 5 seconds every at the start of each song then rotate out. The leaderboard should only include people from the session attached to the player.
 
 ### URLs
 Users should be able to join a queue simply by navigating to the queue URL. The queue url should be simple for users (tuneslam.com/session-name-here), which means session names need to be URL safe and unique. Session names also cannot be common route names (api, admin, about, settings, dashboard... etc). Even if a route is not used now it could be used later, so a blacklist for session names should be implemented in the code that can be easily added to.

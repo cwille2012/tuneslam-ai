@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Session } from '../models/Session';
 import { Admin } from '../models/Admin';
+import { User } from '../models/User';
+import { QueueItem } from '../models/QueueItem';
+import { PlayedSong } from '../models/PlayedSong';
 import { AuthedRequest, requirePlayer } from '../middleware/auth';
+
 import { validate } from '../middleware/validate';
 import { badRequest, forbidden, notFound } from '../utils/errors';
 import { advanceQueue, lockNextIfNeeded, markCurrentPlayedIfPastHalf } from '../services/queue';
@@ -67,7 +71,123 @@ router.get('/spotify-token', async (req: AuthedRequest, res, next) => {
   }
 });
 
+/**
+ * Karma leaderboard for the session this player is bound to.
+ *
+ * Per-session karma isn't stored on User (those counters are global),
+ * so we derive it on demand from QueueItem (currently queued) and
+ * PlayedSong (already played). Scope is enforced by the player JWT —
+ * `req.playerSession` is the slug the token was minted for, so the
+ * client can't spoof another session.
+ *
+ * Karma formula (mirrors GET /api/user/sessions/:slug/me-stats so the
+ * numbers users see in their personal popup match the wall display):
+ *   sessionKarma = sum(netVotes on user's queued items)
+ *                + 1 per played song the user added
+ *
+ * Returns top 10 by karma, with cached display name + avatar from
+ * the user's linked Facebook/Spotify profile (Facebook preferred,
+ * Spotify second, falling back to username + null avatar).
+ */
+router.get('/leaderboard', async (req: AuthedRequest, res, next) => {
+  try {
+    const admin = req.admin!;
+    const slug = req.playerSession!;
+    const session = await Session.findOne({ slug, adminId: admin._id });
+    if (!session) throw notFound('Session not found');
+
+    const [queueRows, playedRows] = await Promise.all([
+      QueueItem.find({ sessionId: session._id, 'addedBy.kind': 'user' })
+        .select('addedBy.id netVotes')
+        .lean(),
+      PlayedSong.find({ sessionId: session._id, 'addedBy.kind': 'user' })
+        .select('addedBy.id')
+        .lean(),
+    ]);
+
+    type Row = { userId: string; songsAdded: number; songsPlayed: number; sessionKarma: number };
+    const byUser = new Map<string, Row>();
+    const ensure = (id: string): Row => {
+      let r = byUser.get(id);
+      if (!r) {
+        r = { userId: id, songsAdded: 0, songsPlayed: 0, sessionKarma: 0 };
+        byUser.set(id, r);
+      }
+      return r;
+    };
+    for (const q of queueRows) {
+      const id = q.addedBy?.id ? String(q.addedBy.id) : null;
+      if (!id) continue;
+      const r = ensure(id);
+      r.songsAdded += 1;
+      r.sessionKarma += Number(q.netVotes || 0);
+    }
+    for (const p of playedRows) {
+      const id = p.addedBy?.id ? String(p.addedBy.id) : null;
+      if (!id) continue;
+      const r = ensure(id);
+      r.songsAdded += 1;
+      r.songsPlayed += 1;
+      r.sessionKarma += 1;
+    }
+
+    // Top 10 only — we never display more than that on the wall.
+    const sorted = Array.from(byUser.values())
+      .sort((a, b) => {
+        if (b.sessionKarma !== a.sessionKarma) return b.sessionKarma - a.sessionKarma;
+        if (b.songsPlayed !== a.songsPlayed) return b.songsPlayed - a.songsPlayed;
+        if (b.songsAdded !== a.songsAdded) return b.songsAdded - a.songsAdded;
+        return a.userId.localeCompare(b.userId);
+      })
+      .slice(0, 10);
+
+    // Resolve user metadata in one batched query. We pull `username`
+    // plus the cached `facebookProfile` and `spotifyProfile` blobs so
+    // we can show display names and avatars without re-hitting the
+    // upstream OAuth providers on every wall refresh.
+    const userIds = sorted.map((r) => r.userId);
+    const users = userIds.length
+      ? await User.find({ _id: { $in: userIds } })
+          .select('username facebookProfile spotifyProfile')
+          .lean()
+      : [];
+    const metaById = new Map<string, { username: string; picture: string | null }>();
+    for (const u of users) {
+      // Picture preference: Facebook > Spotify > null. Mirrors the
+      // actor-resolution rule used in services/activity.ts so the
+      // avatar a user sees in the activity ticker matches the one
+      // shown on the leaderboard.
+      const picture =
+        (u as any).facebookProfile?.pictureUrl ||
+        (u as any).spotifyProfile?.pictureUrl ||
+        null;
+      metaById.set(String(u._id), {
+        username: (u as any).username || 'user',
+        picture,
+      });
+    }
+
+    res.json({
+      leaderboard: sorted.map((r, i) => {
+        const m = metaById.get(r.userId);
+        return {
+          rank: i + 1,
+          username: m?.username || 'user',
+          picture: m?.picture || null,
+          sessionKarma: r.sessionKarma,
+          songsPlayed: r.songsPlayed,
+          songsAdded: r.songsAdded,
+        };
+      }),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
 router.get('/state', async (req: AuthedRequest, res, next) => {
+
   try {
     const admin = req.admin!;
     const slug = req.playerSession!;

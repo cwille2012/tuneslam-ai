@@ -192,17 +192,98 @@ th { color: var(--fg-2); font-weight: 600; }
 .player-art { width: 360px; height: 360px; max-width: 60vmin; max-height: 60vmin; border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); object-fit: cover; }
 .player-title { font-size: 32px; font-weight: 800; margin-top: 24px; }
 .player-sub { font-size: 18px; color: var(--fg-2); margin-top: 8px; }
+/*
+ * The right-hand column is a 3D card-flipper. The outer .player-side
+ * defines the slot dimensions and 3D perspective; the inner cards
+ * (.player-side-card) are absolutely positioned so they overlap and
+ * rotate around the same axis. Toggling .is-flipped on the parent
+ * spins the front face out and the back face in.
+ *
+ * The padding / background / border that previously lived on
+ * .player-side now lives on the cards themselves so each face looks
+ * like a properly-styled panel during the flip.
+ */
 .player-side {
-  /* Same min-height:0 + overflow:auto pattern: this column scrolls
-     internally so the queue's last item is always reachable. */
   min-height: 0;
+  position: relative;
+  perspective: 1600px;
+}
+.player-side h3 { margin: 0 0 12px; }
+.player-side-card {
+  position: absolute;
+  inset: 0;
   padding: 16px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: auto;
+  /*
+    backface-visibility prevents the back face from showing through
+    the front while the flip is in progress (and vice-versa).
+    transform-style preserves the 3D context so the rotateY actually
+    pivots the card instead of squashing it flat.
+  */
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  transition: transform 700ms cubic-bezier(.7, .15, .25, 1);
+  /*
+    will-change hints the browser to promote the layer up-front so
+    the first flip doesn't stutter. Cheap because there are only two
+    cards on the page.
+  */
+  will-change: transform;
 }
-.player-side h3 { margin: 0 0 12px; }
+.player-side-card-front { transform: rotateY(0deg); }
+.player-side-card-back  { transform: rotateY(180deg); }
+.player-side-flipper.is-flipped .player-side-card-front { transform: rotateY(-180deg); }
+.player-side-flipper.is-flipped .player-side-card-back  { transform: rotateY(0deg); }
+
+/*
+ * Karma leaderboard rows. Visually adjacent to .queue-item but with
+ * a circular avatar slot instead of an album-art square — the wall
+ * display reads "this is people, not songs" at a glance.
+ */
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.leaderboard-row .pos {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg-3);
+  width: 28px;
+  text-align: center;
+}
+/* Top-3 ranks get an accent-colored rank number to draw the eye on
+   a wall display. We don't decorate the row itself so the text rows
+   stay calm and readable from across the room. */
+.leaderboard-row-top .pos { color: var(--accent); }
+.leaderboard-row .info { flex: 1 1 auto; min-width: 0; }
+.leaderboard-row .info .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leaderboard-row .info .sub { color: var(--fg-2); font-size: 12px; }
+.leaderboard-row .votes { font-weight: 700; min-width: 44px; text-align: right; color: var(--accent); }
+.leaderboard-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-3);
+  flex: 0 0 auto;
+}
+.leaderboard-avatar-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--fg-2);
+}
+
 
 @media (max-width: 800px) {
   /* On mobile we want the page to scroll naturally instead of locking
