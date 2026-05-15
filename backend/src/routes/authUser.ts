@@ -8,6 +8,8 @@ import { validate } from '../middleware/validate';
 import { AuthedRequest, requireUser } from '../middleware/auth';
 import { publicUser } from '../services/serializers';
 import { conflict, unauthorized } from '../utils/errors';
+import { assertInviteAllowed } from '../utils/invite';
+
 
 const router = Router();
 
@@ -27,7 +29,11 @@ const registerSchema = z.object({
 router.post('/register', authLimiter, validate(registerSchema), async (req, res, next) => {
   try {
     const body = req.body as z.infer<typeof registerSchema>;
+    // Invite-only beta gate — see backend/src/utils/invite.ts. Remove
+    // this line + the import + the file to open registration back up.
+    assertInviteAllowed(body.email);
     const existing = await User.findOne({
+
       $or: [{ username: body.username }, { email: body.email.toLowerCase() }],
     });
     if (existing) throw conflict('Username or email already in use.');

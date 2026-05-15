@@ -5,18 +5,29 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Load env file based on NODE_ENV. Beanstalk/production typically injects vars
 // directly so .env.production is just a template; we still try to load it.
+//
+// Both paths are resolved relative to __dirname (i.e. the compiled file's
+// location) rather than process.cwd(), so it doesn't matter whether the
+// service is launched from the repo root, `backend/`, or anywhere else.
+// systemd's WorkingDirectory= for example is the repo root, so a bare
+// `dotenv.config()` would look at `<repo>/.env` and miss the real file
+// at `backend/.env` entirely. Don't go back to a cwd-relative path.
 const envPath = path.resolve(__dirname, '..', '..', `.env.${NODE_ENV}`);
 dotenv.config({ path: envPath });
-// Also allow a .env to override (useful for local secrets you don't want in
-// source-controlled .env.development / .env.production).
+
+// Also allow `backend/.env` to override (useful for local secrets you
+// don't want in source-controlled .env.development / .env.production).
 //
 // `override: true` is critical: dotenv's default behavior is to skip
 // any var that's already set in process.env, including ones we *just*
 // loaded from .env.production with empty placeholders (e.g.
 // `MONGO_URI=`). Without override, those empty strings would shadow
-// the real values in `.env` and the required() check below would
-// fail. With override, .env always wins, which matches the intent.
-dotenv.config({ override: true });
+// the real values in `backend/.env` and the required() check below
+// would fail. With override, `backend/.env` always wins, which matches
+// the intent.
+const secretsPath = path.resolve(__dirname, '..', '..', '.env');
+dotenv.config({ path: secretsPath, override: true });
+
 
 
 function required(name: string, fallback?: string): string {

@@ -444,22 +444,5 @@ Cloudflare tunnel logs (for when it is a service):
 sudo journalctl -u cloudflared -f
 
 
-
-# /etc/systemd/system/tuneslam-backend.service
-[Unit]
-Description=TuneSlam backend
-After=network.target
-
-[Service]
-Type=simple
-User=chris
-WorkingDirectory=/home/chris/code/tuneslam-ai
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node backend/dist/server.js
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-
-
-sudo systemctl daemon-reload && sudo systemctl enable --now tuneslam-backend
+Remove create account gate:
+grep -rn "assertInviteAllowed\|utils/invite" backend/src

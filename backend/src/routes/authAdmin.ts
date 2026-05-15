@@ -8,6 +8,8 @@ import { validate } from '../middleware/validate';
 import { AuthedRequest, requireAdmin } from '../middleware/auth';
 import { publicAdmin } from '../services/serializers';
 import { badRequest, conflict, unauthorized } from '../utils/errors';
+import { assertInviteAllowed } from '../utils/invite';
+
 
 const router = Router();
 
@@ -32,7 +34,11 @@ const registerSchema = z.object({
 router.post('/register', authLimiter, validate(registerSchema), async (req, res, next) => {
   try {
     const body = req.body as z.infer<typeof registerSchema>;
+    // Invite-only beta gate — see backend/src/utils/invite.ts. Remove
+    // this line + the import + the file to open registration back up.
+    assertInviteAllowed(body.email);
     const existing = await Admin.findOne({ email: body.email.toLowerCase() });
+
     if (existing) throw conflict('Email already registered.');
     const passwordHash = await bcrypt.hash(body.password, 12);
     const admin = await Admin.create({
