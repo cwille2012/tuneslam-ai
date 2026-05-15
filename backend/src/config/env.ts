@@ -8,8 +8,16 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const envPath = path.resolve(__dirname, '..', '..', `.env.${NODE_ENV}`);
 dotenv.config({ path: envPath });
 // Also allow a .env to override (useful for local secrets you don't want in
-// source-controlled .env.development).
-dotenv.config();
+// source-controlled .env.development / .env.production).
+//
+// `override: true` is critical: dotenv's default behavior is to skip
+// any var that's already set in process.env, including ones we *just*
+// loaded from .env.production with empty placeholders (e.g.
+// `MONGO_URI=`). Without override, those empty strings would shadow
+// the real values in `.env` and the required() check below would
+// fail. With override, .env always wins, which matches the intent.
+dotenv.config({ override: true });
+
 
 function required(name: string, fallback?: string): string {
   const v = process.env[name] ?? fallback;
@@ -35,7 +43,15 @@ export const env = {
   isProd: NODE_ENV === 'production',
   isDev: NODE_ENV !== 'production',
   PORT: parseInt(optional('PORT', '4000'), 10),
-  HOST: optional('HOST', '0.0.0.0'),
+  // Default to loopback. The backend is fronted by Cloudflare Tunnel
+  // in production (cloudflared connects out to Cloudflare and forwards
+  // traffic to the local Node process), so the listener only needs to
+  // be reachable from the same host. Defaulting to 127.0.0.1 means a
+  // mis-configured deploy can't accidentally expose the API to the
+  // public Internet — set HOST=0.0.0.0 explicitly if you really do
+  // want a LAN-exposed listener.
+  HOST: optional('HOST', '127.0.0.1'),
+
 
   MONGO_URI: required('MONGO_URI', 'mongodb://127.0.0.1:27017/tuneslam'),
 

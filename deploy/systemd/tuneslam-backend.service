@@ -1,0 +1,87 @@
+# systemd unit for the TuneSlam backend.
+#
+# Install:
+#
+#   # 1. Build:
+#   npm ci
+#   npm --workspace shared  run build
+#   npm --workspace backend run build
+#
+#   # 2. Make `node` reachable from a stable path. systemd has no $PATH
+#   #    and resolves nothing in the user's shell, so it cannot find
+#   #    nvm-installed binaries by itself. Symlink the active node into
+#   #    /usr/local/bin so this unit is insulated from nvm version
+#   #    bumps. Re-run after `nvm install <newver>`:
+#   sudo ln -sf "$(which node)" /usr/local/bin/node
+#
+#   # 3. Install + start:
+#   sudo cp deploy/systemd/tuneslam-backend.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tuneslam-backend
+#   journalctl -u tuneslam-backend -f
+#
+# Secrets live in `backend/.env` (gitignored) — env.ts loads both
+# .env.production and .env, with .env overriding. HOST=127.0.0.1 in
+# .env.production ensures we never accidentally bind a public listener;
+# Cloudflare Tunnel is the only path in.
+#
+# If you'd rather not symlink, replace the ExecStart line below with
+# the absolute path printed by `which node` (e.g.
+# /home/chris/.nvm/versions/node/v24.14.0/bin/node) — note that this
+# path will become wrong the next time you `nvm install`.
+
+[Unit]
+Description=TuneSlam backend (Node/Express + Socket.IO)
+# Wait for the network stack to be up so Mongo connections don't fail
+# on the very first attempt after boot. We don't require a specific
+# remote DB to be reachable — Mongo client retries on its own.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Run as the unprivileged owner of the repo. Replace `chris` if your
+# username differs.
+User=chris
+Group=chris
+
+# CWD must be the repo root so `dotenv` resolves
+# backend/.env.production correctly (it's loaded with a path relative
+# to the compiled server.js, but a sane cwd avoids surprises with any
+# future relative-path reads).
+WorkingDirectory=/home/chris/code/tuneslam-ai
+
+# Force production mode so:
+#   - env.ts loads backend/.env.production
+#   - app.ts uses morgan 'combined' format
+#   - pino uses 'info' log level by default
+Environment=NODE_ENV=production
+
+# Use the symlink created in step 2 of the install instructions above.
+# /usr/local/bin/node is in systemd's default executable search and
+# stays valid across nvm version bumps as long as you re-run the
+# `ln -sf "$(which node)" /usr/local/bin/node` after each upgrade.
+ExecStart=/usr/local/bin/node backend/dist/server.js
+
+# Restart on any non-clean exit (uncaught exception, Mongo loss, etc.)
+# with a short backoff so we don't thrash if the failure is permanent.
+Restart=on-failure
+RestartSec=3s
+
+# Lightweight sandboxing. These are defense-in-depth — the backend
+# doesn't need to write outside its working directory or read root-owned
+# files, so disallow it.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+
+# Forward stdout/stderr to journald so `journalctl -u tuneslam-backend`
+# shows logs. Pino already writes JSON to stdout in prod — no extra
+# config needed.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

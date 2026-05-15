@@ -402,6 +402,7 @@ sudo fuser -k 4000/tcp 5173/tcp 5174/tcp 5175/tcp
 Needed for spotify player in Chrome:
 --unsafely-treat-insecure-origin-as-secure=<player base url here>
 
+
 To build each frontend and put in dist (run from /tuneslam-ai$):
 (Builds use .env.production in each folder, they must all match)
 npm ci && npm --workspace shared run build && npm --workspace @tuneslam/admin run build
@@ -419,3 +420,46 @@ After the first deploy: Open the Cloudflare dashboard → Pages → `player` →
 
 Note:
 The frontends will fail until the backend (API) is up at `api.tuneslam.com` and its `CORS_ORIGINS` includes all three frontend origins. The backend itself is __not__ deployed to Cloudflare Pages — it goes to AWS Elastic Beanstalk (`deploy/beanstalk/`). Cloudflare proxies `api.tuneslam.com` (orange-cloud) to the Beanstalk URL via a CNAME. WebSockets work through the orange-cloud by default.
+
+
+Backend building for running locally (Cloudflare tunnel):
+
+Build:
+npm ci
+npm --workspace shared run build
+npm --workspace backend run build
+
+Run:
+NODE_ENV=production npm --workspace backend run start
+Or as a service:
+sudo systemctl start tuneslam-backend
+sudo systemctl restart tuneslam-backend
+
+Also need running:
+cloudflared tunnel run tuneslam-api-tunnel
+Or as service:
+sudo systemctl start cloudflared
+
+Cloudflare tunnel logs (for when it is a service):
+sudo journalctl -u cloudflared -f
+
+
+
+# /etc/systemd/system/tuneslam-backend.service
+[Unit]
+Description=TuneSlam backend
+After=network.target
+
+[Service]
+Type=simple
+User=chris
+WorkingDirectory=/home/chris/code/tuneslam-ai
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node backend/dist/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload && sudo systemctl enable --now tuneslam-backend
